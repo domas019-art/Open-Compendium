@@ -1,0 +1,18 @@
+# Never uploaded: game content and personal files
+Libraries/
+Data/
+Characters/
+portraits/
+*.part
+*.xml
+*.dnd4e
+*.oc4e.json
+merge_state*
+# Build output and the engine
+build/
+out/
+*.zip
+*.exe
+*.dll
+*.pak
+node_modules/
