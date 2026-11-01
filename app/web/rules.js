@@ -84,34 +84,15 @@ const RULES = {
       (nameIdx[o.name.toLowerCase()] ||= []).push(o.id);
       if(o.type==='Category') (catByName[o.name.toLowerCase()] ||= []).push(o.id.toLowerCase());
     }
-    // Dark Sun has no gods; the builder data has no sorcerer-kings to choose either. Add them as patrons.
-    if(raw.some(o=>/Dark Sun/.test(o.source))){
-      for(const k of SORCERER_KINGS){
-        const id='ID_OC_SORCERER_KING_'+k.name.toUpperCase().replace(/\W/g,'');
-        if(els[id]) continue;
-        const o={id, name:k.name, type:'Deity', source:'Dark Sun Campaign Setting', cats:[], rules:[], spec:{'Patron of':k.city}, added:k, group:'Dark Sun: Sorcerer-Kings'};
-        els[id]=o; (byType.Deity ||= []).push(id); (nameIdx[o.name.toLowerCase()] ||= []).push(id);
-      }
+    // patrons added in a library file (the sorcerer-kings in the additions file): a list group and related words
+    for(const o of raw) if(o.spec['_Related Words']){
+      o.group=o.spec['_Group']||o.group;
+      o.added={city:o.spec['Patron of']||'', title:o.spec['_Patron Title']||'Patron of', words:o.spec['_Related Words'].split(',').map(x=>x.trim()).filter(Boolean)};
     }
     this.raw=raw;
     this.db={els, byType, catByName, nameIdx};
   }
 };
-
-// The sorcerer-kings of Athas (Dark Sun), offered as patrons in the deity list.
-// They are not in the original builder; choosing one has no rules effect.
-const SORCERER_KINGS=[
-  {name:'Abalach-Re', city:'Raam', words:['Abalach-Re','Raam','Raamite']},
-  {name:'Andropinis', city:'Balic', words:['Andropinis','Balic','Balican']},
-  {name:'Daskinor', city:'Eldaarich', words:['Daskinor','Eldaarich']},
-  {name:'Dregoth', city:'New Giustenal', words:['Dregoth','Giustenal']},
-  {name:'Hamanu', city:'Urik', words:['Hamanu','Urik']},
-  {name:'Kalak', city:'Tyr (slain before the campaign begins)', words:['Kalak','Tyr','Tyrian']},
-  {name:'Lalali-Puy', city:'Gulg', words:['Lalali-Puy','Gulg']},
-  {name:'Nibenay', city:'Nibenay', words:['Nibenay','Nibenese']},
-  {name:'Oronis', city:'Kurn', words:['Oronis','Kurn']},
-  {name:'Tectuktitlay', city:'Draj', words:['Tectuktitlay','Draj','Draji']},
-];
 
 const ABILITIES=['Strength','Constitution','Dexterity','Intelligence','Wisdom','Charisma'];
 const ABIL_SHORT={str:'Strength',con:'Constitution',dex:'Dexterity',int:'Intelligence',wis:'Wisdom',cha:'Charisma'};

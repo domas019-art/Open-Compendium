@@ -1078,7 +1078,9 @@ function minLevelFor(e){
 // Group by the actual book: Player's Handbooks first, then Essentials, then the rest alphabetically
 function sourceGroup(e){ if(e.group) return e.group; return (e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core')[0]||'Core rules'; }
 function sourceGroupSort(a,b){
-  if(/^Dark Sun/.test(a) && /^Dark Sun/.test(b)) return a.length-b.length;    // the sorcerer-kings right after the Dark Sun book
+  // a group like "Dark Sun: …" right after its book ("Dark Sun Campaign Setting")
+  const ga=/^([^:]+):/.exec(a)?.[1], gb=/^([^:]+):/.exec(b)?.[1];
+  if(ga && b.startsWith(ga) && !gb) return 1; if(gb && a.startsWith(gb) && !ga) return -1;
   const rank=x=>/^Player's Handbook( [23])?$/.test(x) ? 0 : /Player Essentials|Heroes of the Fallen Lands|Heroes of the Forgotten Kingdoms|Heroes of Shadow/.test(x) ? 1 : /^(Dragon|Dungeon) Magazine/.test(x) ? 3 : 2;
   return rank(a)-rank(b) || a.localeCompare(b,undefined,{numeric:true});
 }
@@ -1156,11 +1158,11 @@ function renderPowerCard(box,e){
     box.append(...specRow(k,v)); }
   if(e.text) for(const para of e.text.split(/\n\s*/)) if(para.trim()) box.append(el('p',{text:para.trim()}));
 }
-// A sorcerer-king patron: who they are, plus anything in the user's own files that belongs to them
+// A patron from the additions file (a Dark Sun sorcerer-king, say): who they are, plus anything in the user's own files that belongs to them
 function renderPatron(box,e){
   const k=e.added;
-  box.replaceChildren(el('h1',{class:'player'},e.name), el('p',{},el('b',{text:'Sorcerer-king of '}),k.city));
-  box.append(el('p',{class:'muted small',text:'Added by Open Compendium: the original Character Builder has no sorcerer-kings to choose. Choosing one is for your character\'s story and has no rules effect.'}));
+  box.replaceChildren(el('h1',{class:'player'},e.name), el('p',{},el('b',{text:k.title+' '}),k.city));
+  box.append(el('p',{class:'muted small',text:'From your additions file: the original Character Builder has no such choice. Choosing one is for your character\'s story and has no rules effect.'}));
   const re=new RegExp('\\b('+k.words.map(w=>w.replace(/[-]/g,'\\-')).join('|')+')\\b','i');
   // the compendium's monster entry, if the compendium is loaded
   const m=lib.monster; const ni=m?.cols ? m.cols.indexOf('Name') : -1;
@@ -1173,8 +1175,8 @@ function renderPatron(box,e){
     (rel[o.type] ||= []).push(el('span',{class:'term',dataset:{rid:o.id},text:n}));
   }
   for(const [t,items] of Object.entries(rel)) box.append(el('p',{},el('b',{text:t+(items.length>1?'s':'')+': '}),...items.flatMap((x,i)=>[i?', ':'',x])));
-  if(!mon.length && !Object.keys(rel).length) box.append(el('p',{class:'muted',text:'Nothing else about this sorcerer-king is in your files.'}));
-  box.append(el('p',{class:'publishedIn',text:'Sorcerer-kings are described in the Dark Sun Campaign Setting.'}));
+  if(!mon.length && !Object.keys(rel).length) box.append(el('p',{class:'muted',text:'Nothing else about '+e.name+' is in your files.'}));
+  box.append(el('p',{class:'publishedIn',text:e.source ? 'Described in the '+e.source+'.' : ''}));
 }
 // options written as house rules (not from a published book), like the Oversized Weapon Grip feat
 const isHouseRule=e=>!!(e && (sp(e,'_Homebrew') || /house rules?/i.test(e.source||'')));
