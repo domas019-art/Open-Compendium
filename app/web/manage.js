@@ -55,6 +55,7 @@ Object.assign(Builder,{
         row('Gender', pick('Gender')),
         row('Alignment', pick('Alignment')),
         row('Deity', pick('Deity')),
+        row('Deity name', this.field(info,'deityName','Deity name',{ph:'optional: your own name for the god (e.g. a renamed or homebrew deity)'})),
         row('Height', this.field(info,'height','Height',{ph:race?Units.text(sp(race,'Average Height')):''})),
         row('Weight', this.field(info,'weight','Weight',{ph:race?Units.text(sp(race,'Average Weight'),'weight'):''})),
         row('Age', this.field(info,'age','Age'))),

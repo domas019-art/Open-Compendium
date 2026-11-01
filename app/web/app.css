@@ -649,3 +649,8 @@ body.sheetmode #bSheet{display:none}
 .pknum{margin:6px 0 10px}
 .pknum ul{margin:2px 0 0;padding-left:18px;font-size:13px}
 .pknum small{color:var(--muted)}
+.activelist{margin:2px 0 0;padding-left:16px}
+.activelist li{margin:1px 0}
+.makebox{margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+.makebox .makerow{gap:8px;align-items:center;margin:4px 0}
+.makebox .makerow .grow{flex:1}

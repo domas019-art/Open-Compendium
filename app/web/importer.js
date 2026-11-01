@@ -42,20 +42,25 @@ function importDnd4e(text){
   if(ai>=0){ ch.method='array'; ch.arrayIdx=ai; }
   else{ const pb=pointBuy(ch.abilities); ch.method = !pb.bad && pb.cost===22 ? 'points' : 'manual'; }
 
-  const picks=ch.picks, hb=ch.hb, missing=new Set();
+  const picks=ch.picks, hb=ch.hb, missing=new Set(); let customDeity='';
   const isHouse=n=>n.getAttribute('legality')==='houserule';
 
   // Walk the choice tree: children that the element doesn't grant itself were picked for one of its selections.
   function walk(node){
     const id=node.getAttribute('internal-id'), def=db.els[id];
     const children=kids(node,'RulesElement');
-    if(!def){ if(id) missing.add(node.getAttribute('name')||id); return; }
+    if(!def){
+      // a god renamed or made up in the original builder: kept as the character's own deity name
+      if(node.getAttribute('type')==='Deity'){ customDeity=node.getAttribute('name')||''; return; }
+      if(id) missing.add(node.getAttribute('name')||id); return; }
     const grants=new Set(def.rules.filter(r=>r[0]==='grant').map(r=>r[1].name));
     const used={};
     for(const c of children){
       const cid=c.getAttribute('internal-id'); if(!cid) continue;          // an empty pick
       if(grants.has(cid)){ walk(c); continue; }
       const ctype=c.getAttribute('type');
+      // a god renamed or made up in the original builder: kept as the character's own deity name, the deity choice left open
+      if(ctype==='Deity' && !db.els[cid]){ customDeity=c.getAttribute('name')||''; continue; }
       let idx=-1;
       def.rules.forEach(([tag,a],i)=>{ if(idx<0 && tag==='select' && a.type===ctype && (used[i]||0)<Math.max(1,+(a.number||1))) idx=i; });
       if(idx<0){ walk(c); continue; }                                       // granted in some other way
@@ -109,6 +114,11 @@ function importDnd4e(text){
     const parts=kids(l,'RulesElement'); const ids=parts.map(r=>r.getAttribute('internal-id')).filter(id=>id && db.els[id]);
     parts.forEach(r=>{ if(r.getAttribute('internal-id') && !db.els[r.getAttribute('internal-id')]) missing.add(r.getAttribute('name')); });
     if(!ids.length) continue;
+    // rituals, alchemical formulas and martial practices go into the ritual book, not the backpack
+    if(ids.every(id=>db.els[id].type==='Ritual')){
+      for(const id of ids){ const k={rituals:'rituals',alchemy:'formulas',practices:'practices'}[ritualKind(db.els[id])]; (ch[k] ||= []); if(!ch[k].includes(id)) ch[k].push(id); }
+      continue;
+    }
     ids.sort((a,b)=>(db.els[a].type==='Magic Item')-(db.els[b].type==='Magic Item'));   // base item first
     const it={uid:Math.random().toString(36).slice(2,9), ids, qty};
     ch.items.push(it);
@@ -125,6 +135,15 @@ function importDnd4e(text){
   const beast=(sheet?.querySelector('Companions > Beast > ID')?.textContent||'').trim();
   const bm=/^(?:(.*?)\s+-\s+)?Level\s+\d+\s+(.*)$/.exec(beast);
   if(bm) ch.companionInfo={_import:{name:(bm[1]||'').trim(), desc:(bm[2]||'').trim()}};
+  if(customDeity) ch.info.deityName=customDeity;
+  // the journal ("Adventure log"): title, date, notes, and the other fields when they were filled in
+  const jn=sheet && kids(sheet,'Journal')[0];
+  ch.journal=(jn ? kids(jn,'JournalEntry') : []).map((j,i)=>{
+    const f=t=>txt(j,t), ts=f('TimeStamp'), d=ts ? new Date(ts) : null;
+    const extra=[['Region','Region'],['Treasure','Treasure'],['XPGain','Experience gained'],['GPDelta','Gold gained'],['LevelAtEnd','Level at the end']]
+      .map(([k,l])=>f(k) ? l+': '+f(k) : '').filter(Boolean);
+    return {id:'j'+Date.now().toString(36)+i, title:f('Title')||'Untitled', date:d && !isNaN(d) ? d.toLocaleDateString() : '', text:[f('Notes'), ...extra].filter(Boolean).join('\n\n')};
+  });
   const por=txt(det,'Portrait');      // a picture file on this computer, e.g. file://C:\Users\...\Slayer.jpg
   // the picture is looked for in the portraits folder by its file name; the original place is kept as a fallback
   if(por){ ch.portraitPath=por.replace(/^file:\/\/(?!\/)/i,'file:///').replace(/\\/g,'/'); ch.portrait=ch.portraitPath.split('/').pop(); }

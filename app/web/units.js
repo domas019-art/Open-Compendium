@@ -38,7 +38,7 @@ const Units={
     this.reGrid=new RegExp('\\b(\\d+)-(?:foot|ft\\.?)(-|\\s)(radius|square|cube|burst|blast|wide|long|high|tall|deep|area|zone|line|wall|emanation)\\b','gi');
     this.reRange=new RegExp('\\b'+N+'(\\s*(?:-|–|—|to|or|and)\\s*)'+N+'(\\s*-\\s*|\\s+)'+W,'gi');
     this.reOne=new RegExp('\\b'+N+'(\\s*-\\s*|\\s+|(?=[a-z]))'+W,'gi');
-    this.quick=/\d\s*(?:-|\s)?(?:feet|foot|ft|mile|mi\.|inch|in\.|yard|yd|pound|lb|gallon|pint|ounce|oz|cubic|square)|\d\s*['′]\s*\d/i;
+    this.quick=/\d\s*(?:-|\s)?(?:feet|foot|ft|mile|mi\.|inch|in\.|yard|yd|pound|lb|gallon|pint|ounce|oz|cubic|square)|\d\s*['′]\s*\d|Fahrenheit|°\s?F\b|[—–-]\s*lb/i;
     const btn=$('#unitsBtn'); if(btn){ btn.onclick=()=>this.set(!this.metric); this.label(); }
     new MutationObserver(ms=>{ if(!this.metric) return; for(const m of ms) for(const n of m.addedNodes) this.walk(n); })
       .observe(document.body,{childList:true,subtree:true});
@@ -83,6 +83,12 @@ const Units={
     return out;
   },
   convert(t){
+    // temperatures: "between –50 and 140 degrees Fahrenheit" -> "between –46 and 60 degrees Celsius"
+    const C=f=>{ const v=Math.round((+String(f).replace(/[–−]/,'-')-32)*5/9); return (v<0?'–':'')+Math.abs(v); };
+    t=t.replace(/([–−-]?\d+)(\s+(?:and|to|-|–)\s+)([–−-]?\d+)\s*(?:degrees Fahrenheit|°\s?F\b)/gi,(m,a,mid,b)=>C(a)+mid+C(b)+' degrees Celsius');
+    t=t.replace(/([–−-]?\d+)\s*(?:degrees Fahrenheit|°\s?F\b)/gi,(m,a)=>C(a)+' degrees Celsius');
+    // a weight that is a dash: "Weight: — lb."
+    t=t.replace(/(Weight\s*:?\s*[—–-])\s*lb\.?/gi,'$1 kg');
     // heights: 6'2" -> 188 cm
     t=t.replace(this.reHeight,(m,f,i)=>Math.round((+f*12+(+i))*2.54)+' cm');
     // grid areas: "5-foot radius" -> "1-square radius" (a square is 5 feet)

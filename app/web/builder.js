@@ -620,7 +620,7 @@ const Builder={
           for(const k of [...g.keys()].sort(sourceGroupSort)){ const og=el('optgroup',{label:k}); g.get(k).forEach(o=>og.append(opt(o))); sel.append(og); }
         } else for(const o of opts) sel.add(opt(o));
         sel.onchange=()=>{ if(sel.value) this.setPick(slot,sel.value,true); else picks.slice().forEach(id=>this.setPick(slot,id,false)); };
-        row.append(el('div',{class:'brow'},sel, picks[0]?el('span',{class:'term small',dataset:{rid:picks[0]},text:'details'}):null));
+        row.append(el('div',{class:'brow'},sel, picks[0] && slot.type!=='Race Ability Bonus'?el('span',{class:'term small',dataset:{rid:picks[0]},text:'details'}):null));
         if(!opts.length) row.append(el('p',{class:'muted small',text: slot.type==='Background Choice' ? 'Choose a background first.' : 'No options.'}));
       }else{
         const chips=el('div',{class:'chips'});
@@ -1345,3 +1345,13 @@ $('#picker').addEventListener('close',()=>closePop());
     if(moved) apply(e.clientX < innerWidth/2 ? 'left' : 'right'); delete document.body.dataset.sheetdrop; });
   document.addEventListener('dblclick',e=>{ if(e.target.closest && e.target.closest('.sheetgrip')) apply(document.body.dataset.sheet==='left'?'right':'left'); });
 })();
+
+// the shop's lists: the up and down arrow keys move to the next or previous entry (when not typing in a box)
+document.addEventListener('keydown',e=>{
+  if(!/^Arrow(Up|Down)$/.test(e.key) || Builder.section!=='shop' || e.target.closest?.('input,textarea,select,dialog')) return;
+  const rows=[...document.querySelectorAll('#bChoices .shoplist tr.row')]; if(!rows.length) return;
+  e.preventDefault();
+  const i=rows.findIndex(r=>r.classList.contains('on'));
+  const next=rows[i<0 ? 0 : Math.max(0,Math.min(rows.length-1,i+(e.key==='ArrowDown'?1:-1)))];
+  if(next && !next.classList.contains('on')){ next.click(); requestAnimationFrame(()=>document.querySelector('#bChoices .shoplist tr.row.on')?.scrollIntoView({block:'nearest'})); }
+});

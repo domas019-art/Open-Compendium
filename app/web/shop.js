@@ -243,7 +243,7 @@ Object.assign(Builder,{
       sets:[['level','Lvl',r=>r.level||'*',r=>r.level,1],['name','Name',nameCell,r=>r.e.name],['price','Price',r=>r.cost?fmtMoney(r.cost):'—',r=>r.cost,1],
         ['slot','Item slot',r=>sp(r.e,'Item Slot').replace(/^Off-hand$/i,'')||'',r=>sp(r.e,'Item Slot')]],
     }[view];
-    const DEF={armor:'bonus',weapon:'wcat',gear:'name',magic:'level',sets:'level'};
+    const DEF={armor:'bonus',weapon:'name',gear:'name',magic:'level',sets:'level'};
     let [sk,dir]=S.sorts[view]||[DEF[view],1];
     const col=COLS.find(c=>c[0]===sk)||COLS[0];
     rows=[...rows].sort((a,b)=>{ const x=col[3](a), y=col[3](b);
@@ -542,7 +542,22 @@ Object.assign(Builder,{
     // right: the selected one's description
     const detail=el('div',{class:'shopdetail',dataset:{keep:'rdetail:'+(S.rsel||'')}});
     const sel=S.rsel && RULES.db.els[S.rsel];
-    if(sel && ritualKind(sel)===kind){ const box=el('div',{class:'entry shopentry'}); this.renderElement(box,sel.id); detail.append(box); }
+    if(sel && ritualKind(sel)===kind){
+      // a known alchemical formula: make its items (components cost the item's market price; 30 minutes each)
+      if(kind==='alchemy' && known.includes(sel.id)){
+        const vars=String(sp(sel,'_RELATED_ITEMS')).split(',').map(x=>RULES.db.els[x.trim()]).filter(Boolean)
+          .sort((a,b)=>(+sp(a,'Level')||0)-(+sp(b,'Level')||0));
+        if(vars.length) detail.append(el('div',{class:'makebox'},
+          el('h4',{class:'lvlhead',text:'Make'}),
+          !can ? el('p',{class:'warn small',text:'Making alchemical items needs the Alchemist feat or theme.'}) : null,
+          ...vars.map(v=>{ const lv=+sp(v,'Level')||0, price=itemCost(v), hi=lv>L;
+            return el('div',{class:'brow makerow'},
+              el('span',{class:'grow',text:v.name}), el('span',{class:'muted small',text:fmtMoney(price)}),
+              el('button',{class:'btn small',type:'button',disabled:!can||hi||price>(ch.money||0),
+                title:hi?'Higher level than the character':price>(ch.money||0)?'Not enough money for the components':'Pay for the components ('+fmtMoney(price)+') and add the item',
+                text:'Make',onclick:()=>{ this.shopMsg=this.giveItem([v.id],1,true).replace(/^Bought/,'Made'); this.changed(); }})); })));
+      }
+      const box=el('div',{class:'entry shopentry'}); this.renderElement(box,sel.id); detail.append(box); }
     else detail.append(el('p',{class:'muted pad',text:`Pick a ${label} to read it here.`}));
     return [el('div',{class:'bcard wide'},
       el('div',{class:'stephead'}, el('h3',{text:{rituals:'Rituals',alchemy:'Alchemical formulas',practices:'Martial practices'}[kind]}),

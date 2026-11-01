@@ -221,11 +221,30 @@ Object.assign(Builder,{
     const P=this.play(); (P.active ||= {})[kind]=p.id;
     for(const e of this.activeBenefits(p,kind)) P.effects.push({id:Date.now()+Math.random(), ...e, note:p.name, dur:'until the '+kind+' ends', from:'active:'+p.id});
   },
-  // the text after "You enter the rage of ..." / "You assume the ... stance.": what the stance or rage does
-  activeText(p){
-    const t=[sp(p,'Effect'), ...['Hit','Miss'].map(k=>sp(p,k)).filter(x=>/until the (?:stance|rage) ends/i.test(x))].join(' ');
-    return t.replace(/^\s*You (?:enter|assume)[^.]*\.\s*/i,'').replace(/\s+/g,' ').trim();
+  /* what a stance or rage does, as separate benefits with this level's numbers:
+     "Until the stance ends, you gain the following benefits: -You gain a +2 power bonus to Stealth checks. -While you
+     have combat advantage ..., +2 ... damage rolls. Level 11: The bonus to damage rolls increases to +3." */
+  activeClauses(p){
+    const L=this.st.level;
+    let t=[sp(p,'Effect'), ...['Hit','Miss'].map(k=>sp(p,k)).filter(x=>/until the (?:stance|rage) ends/i.test(x))].join(' ').replace(/\s+/g,' ').trim();
+    const u=/until the (?:stance|rage) ends,?\s*/i.exec(t);
+    t = u ? t.slice(u.index+u[0].length) : t.replace(/^\s*You (?:enter|assume)[^.]*\.\s*/i,'');
+    const ups=[]; t=t.replace(/Level (\d+):\s*([^.]*)\.\s*/g,(m,lv,x)=>{ ups.push([+lv,x]); return ''; }).trim();
+    t=t.replace(/^you gain the following benefits:?\s*/i,'');
+    let parts=/^\s*-/.test(t) ? t.split(/\s*-\s*(?=[A-Z])/) : t.split(/(?<=\.)\s+(?=[A-Z])/);
+    parts=parts.map(x=>x.trim()).filter(Boolean).map(x=>x[0].toUpperCase()+x.slice(1)).map(x=>/[.!]$/.test(x)?x:x+'.');
+    // "Level 11: The bonus to damage rolls increases to +3": the clause it means gets the new number
+    for(const [lv,x] of ups.sort((a,b)=>a[0]-b[0])){
+      if(L<lv) continue; const n=/\+(\d+)/.exec(x); if(!n) continue;
+      const key=/damage/i.test(x)?/damage/i:/attack/i.test(x)?/attack/i:null;
+      let i=-1; parts.forEach((c,j)=>{ if(/\+\d+/.test(c) && (!key || key.test(c))) i=j; });
+      if(i>=0) parts[i]=parts[i].replace(/\+\d+/,'+'+n[1]);
+    }
+    return parts;
   },
+  activeText(p){ return this.activeClauses(p).join(' '); },
+  // a benefit that only counts sometimes ("while you have combat advantage", "made to climb", "during your first turn")
+  isConditional(c){ return /\b(while|when|whenever|if|during|made to|that you provoke|against (?:it|that|an?|the|opportunity)|first turn|instead)\b/i.test(c); },
   // the main weapon's damage dice, for "1[W]"
   weaponDice(){
     const ch=this.ch, it=(ch.items||[]).find(x=>x.uid===ch.equip?.main), base=it && itemParts(it).base;
@@ -241,51 +260,50 @@ Object.assign(Builder,{
       .replace(/one-half your level/gi,`one-half your level (${Math.floor(L/2)})`)
       .replace(/(\d+)\[W\]/g,(m0,n)=>{ const d=/^(\d+)d(\d+)$/.exec(W); return d ? `${m0} (${n*d[1]}d${d[2]})` : m0; });
   },
-  /* what an active stance or rage adds to the numbers:
-     "you gain a +1 power bonus to the attack rolls of basic attacks using a weapon", "a +4 bonus to grab attacks",
-     "a bonus to melee damage rolls equal to your Constitution modifier if either you or your target is bloodied" */
+  /* what an active stance or rage adds to the numbers: each benefit that is a plain bonus ("+2 power bonus to
+     Stealth checks", "+4 to grab attacks", "+2 bonus to speed"); a bonus "if you or your target is bloodied" counts
+     while you are bloodied. Everything else becomes a reminder. */
   activeBenefits(p,kind){
-    const L=this.st.level, out=[], mod=a=>Math.floor((this.st.stat(a)-10)/2);
-    const text=[sp(p,'Effect'),sp(p,'Hit'),sp(p,'Miss'),p.text||''].join(' ');
-    const re=new RegExp('until the '+kind+' ends,?\\s+([^.]*)\\.((?:\\s*Level \\d+:[^.]*\\.)*)','gi');
-    let m;
-    while((m=re.exec(text))){
-      let clause=m[1];
-      for(const lv of [...m[2].matchAll(/Level (\d+):\s*\+(\d+)/gi)]) if(L>=+lv[1]) clause=clause.replace(/\+\d+/,'+'+lv[2]);
-      let b=/you gain a \+(\d+) (?:(\w+) )?bonus to (?:the )?(.+)$/i.exec(clause), v, type, what;
+    const out=[], mod=a=>Math.floor((this.st.stat(a)-10)/2);
+    for(const clause of this.activeClauses(p)){
+      const bl=/if either you or your target is bloodied|while you are bloodied/i.test(clause);
+      if(this.isConditional(clause) && !bl) continue;
+      let b=/you gain a \+(\d+) (?:(\w+) )?bonus to (?:the )?(.+?)\.?$/i.exec(clause), v, type, what;
       if(b){ v=+b[1]; type=b[2]; what=b[3]; }
       else { b=/you gain an? (?:(\w+) )?bonus to (?:the )?(.+?) equal to your (\w+) modifier(.*)$/i.exec(clause); if(!b) continue;
-        const ab=ABILITIES.find(a=>a.toLowerCase()===b[3].toLowerCase()); if(!ab) continue;
-        v=mod(ab); type=b[1]; what=b[2]+' '+b[4]; }
+        const ab=ABILITIES.find(a=>a.toLowerCase()===b[3].toLowerCase()); if(!ab) continue; v=mod(ab); type=b[1]; what=b[2]+' '+b[4]; }
+      if(/following/i.test(type||'')) continue;
       type=type && !/^an?$/i.test(type) ? type[0].toUpperCase()+type.slice(1) : '';
       what=what.toLowerCase();
-      const whenBloodied=/bloodied/.test(what);
       const basic=/basic attacks?/.test(what), weapon=/using a weapon|weapon attacks?|with weapons?|weapon damage/.test(what), melee=/melee/.test(what);
       const kws=[basic?'basic attack':'', weapon?'weapon':''].filter(Boolean);
-      const add=(stat,extra={})=>out.push({stat, value:v, type, kws:[...kws,...(extra.kws||[])], melee, whenBloodied});
+      const add=(stat,extra={})=>out.push({stat, value:v, type, kws:[...kws,...(extra.kws||[])], melee, whenBloodied:bl});
       let hit=false;
       if(/attack rolls?/.test(what)){ add('Attack rolls'); hit=true; }
       if(/damage rolls?/.test(what)){ add('Damage rolls'); hit=true; }
-      // "+4 bonus to grab attacks", "bull rush attacks", "opportunity attacks"
       if(!hit){ const k=/\b(grab|bull rush|opportunity|charge)(?: attacks?)?\b/.exec(what); if(k && /attack/.test(what)){ add('Attack rolls',{kws:[k[1]==='charge'?'charge':k[1]+' attack']}); hit=true; } }
       if(!hit && /\bmelee attacks?\b/.test(what) && !/damage/.test(what)){ add('Attack rolls'); hit=true; }
       if(/all defenses/.test(what)) add('All defenses');
       else for(const [w,stat] of [['ac','AC'],['armor class','AC'],['fortitude','Fortitude'],['reflex','Reflex'],['will','Will']]) if(new RegExp('\\b'+w+'\\b').test(what)) add(stat);
       if(/\bspeed\b/.test(what)) add('Speed');
+      if(/\binitiative\b/.test(what)) add('Initiative');
       if(/saving throws?/.test(what)) add('Saving throws');
+      for(const k of SKILLS) if(new RegExp('\\b'+k+'\\b','i').test(what)) add(k);
     }
     return out;
   },
-  /* reminders on attack cards from what is active: the parts of a stance or rage about damage that aren't plain
-     numbers (extra [W], damage to grabbed enemies...), with the numbers worked out */
-  activeReminders(){
-    const A=this.play().active||{}, out=[];
+  /* reminders on attack cards: the benefits of what is active that matter for attacks but can't be put in the
+     numbers (extra [W], "+2 damage while you have combat advantage"), with this level's numbers worked out */
+  activeReminders(how=''){
+    const A=this.play().active||{}, out=[], bl=!!this.play().bloodied;
+    // a clause only about ranged (or melee) attacks is not shown on the other kind of attack
+    const melee=/melee|close/i.test(how), ranged=/ranged|area/i.test(how);
+    const fits=c=>!how.trim() || !((/\branged\b/i.test(c) && !/\bmelee\b/i.test(c) && melee && !ranged) || (/\bmelee\b/i.test(c) && !/\branged\b/i.test(c) && ranged && !melee));
     for(const id of Object.values(A)){
       const p=RULES.db.els[id]; if(!p) continue;
-      const parts=this.activeText(p).split(/(?<=\.)\s+/).filter(t=>/damage|\[W\]/i.test(t));
-      const bl=!!this.play().bloodied;
-      const keep=parts.filter(t=>!/you gain an? (?:\+\d+ )?(?:\w+ )?bonus to (?:the )?(?:melee |weapon )?(?:damage rolls|attack rolls)/i.test(t) || (/bloodied/i.test(t) && !bl));
-      if(keep.length) out.push(p.name+': '+this.workOut(keep.join(' ')));
+      const keep=this.activeClauses(p).filter(c=>fits(c) && /attack roll|damage|\[W\]/i.test(c) &&
+        (this.isConditional(c) ? !(/if either you or your target is bloodied|while you are bloodied/i.test(c) && bl) : !/^you gain an? (?:\+\d+ )?(?:\w+ )?bonus to (?:the )?(?:melee |weapon )?(?:damage rolls|attack rolls)/i.test(c)));
+      if(keep.length) out.push(p.name.replace(/^Aspect of the /,'')+': '+this.workOut(keep.join(' ')));
     }
     return out;
   },
@@ -463,7 +481,7 @@ Object.assign(Builder,{
           summary ? el('div',{class:'patk',text:summary+(calc.rows.length>1?`  +${calc.rows.length-1} more`:'')}) : null,
           P.quarry && p.name==="Hunter's Quarry" ? el('div',{class:'phint',text:'Quarry designated: suggested on your attacks until a rest'}) : null,
           P.quarry && calc.rows.some(r=>r.dmg) && !p.pet && !/beast'?s attack bonus/i.test(sp(p,'Attack')) ? el('div',{class:'phint',text:this.quarryText()}) : null,
-          ...(calc.rows.some(r=>r.dmg) && !p.pet && !isAct ? this.activeReminders().map(t=>el('div',{class:'phint rage',text:t})) : []),
+          ...(calc.rows.some(r=>r.dmg) && !p.pet && !isAct ? this.activeReminders(String(sp(p,'Attack Type')||'')+' '+calc.rows.map(r=>r.range||'').join(' ')).map(t=>el('div',{class:'phint rage',text:t})) : []),
           gate ? el('div',{class:'pgate',text:gate.text || (gate.ok?'Available: you are bloodied':'Only while bloodied')}) : null),
         p.aura ? el('span',{class:'muted small',text:'always on'}) : el('button',{class:'btn small puse'+(used?' on':''),type:'button',text:used?'Used':'Use',
           title:limited?(used?'Mark as available again':'Mark as used (and the action it takes)'):'Mark the action it takes',
@@ -483,8 +501,8 @@ Object.assign(Builder,{
             this.changed(); }}));
       // an active stance or rage: what it does, and a button to end it
       if(isAct){
-        const line=this.workOut(this.activeText(p));
-        if(line) row.querySelector('.pmain').append(el('div',{class:'phint',text:'Active: '+line}));
+        const cl=this.activeClauses(p).map(c=>this.workOut(c));
+        if(cl.length) row.querySelector('.pmain').append(el('div',{class:'phint'}, el('b',{text:'Active:'}), cl.length>1 ? el('ul',{class:'activelist'}, ...cl.map(c=>el('li',{text:c}))) : ' '+cl[0]));
         const endBtn=el('button',{class:'btn small pend',type:'button',text:'End',title:'End the '+akind+' (no action)',onclick:()=>{ this.endActive(akind); this.changed(); }});
         const use=row.querySelector('.puse'); const col=el('div',{class:'pbtns'}); use.replaceWith(col); col.append(use,endBtn);
       }
