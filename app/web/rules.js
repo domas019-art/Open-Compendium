@@ -137,9 +137,11 @@ function evaluate(ch){
       el.rules.forEach(([tag,a],i)=>{
         const lvl=+(a.level||0); if(lvl && lvl>st.level) return;
         const here=Math.max(at,lvl);
-        if(a.requires && !reqOk(a.requires, prev)) return;
+        // "WearingOffHandAxe", "WearingRod": what the character holds, checked against the equipment like "wearing"
+        const wearReq=/^Wearing/.test(a.requires||'') ? wearingReq(a.requires) : null;
+        if(a.requires && !wearReq && !reqOk(a.requires, prev)) return;
         if(tag==='grant') visit(a.name, id, here);
-        else if(tag==='statadd') st.adds.push({stat:a.name, value:a.value, type:a.type||'', cond:a.condition, wearing:a.wearing, notWearing:a['not-wearing'], skip:('zero' in a)||('non-zero' in a), src:id});
+        else if(tag==='statadd') st.adds.push({stat:a.name, value:a.value, type:a.type||'', cond:a.condition, wearing:a.wearing, wearReq, notWearing:a['not-wearing'], skip:('zero' in a)||('non-zero' in a), src:id});
         else if(tag==='textstring') st.texts[a.name]=a.value;
         else if(tag==='statalias') st.alias[(a.alias||'').toLowerCase()]=a.name;
         else if(tag==='select'){
@@ -271,7 +273,7 @@ function makeStat(st,ch){
   const push=(n,ad)=>(by[norm(n)] ||= []).push(ad);
   const w=st.wear||wearContext(ch);
   const on=c=>condActive(c,ch);
-  for(const ad of st.adds) if((!ad.cond || on(ad.cond)) && !ad.skip && (!ad.wearing || w.ok(ad.wearing)) && (!ad.notWearing || !w.ok(ad.notWearing))) push(ad.stat,ad);
+  for(const ad of st.adds) if((!ad.cond || on(ad.cond)) && !ad.skip && (!ad.wearing || w.ok(ad.wearing)) && (!ad.wearReq || ad.wearReq.every(x=>w.ok(x))) && (!ad.notWearing || !w.ok(ad.notWearing))) push(ad.stat,ad);
   for(const a of ABILITIES) push(a,{value:'+'+(+ch.abilities?.[a]||10), type:'Base'});
   const term=v=>{
     v=String(v).trim(); let sign=1;
@@ -538,6 +540,13 @@ function fmtMoney(cp){
 }
 const itemWeight=it=>{ const {base,magic}=itemParts(it); return +(sp(base||magic,'Weight').replace(/[^\d.]/g,''))||0; };
 
+/* "requires" written as WearingOffHandLightBlade&WearingRod: a list of "wearing" conditions (one we can't check never holds) */
+function wearingReq(r){
+  return String(r).split('&').map(x=>{ x=x.trim().replace(/^Wearing/,'');
+    let m=/^OffHand(.+)$/.exec(x); if(m) return 'offhand:'+m[1].replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase();
+    if(/^(Rod|Wand|Staff|Orb|Tome|Totem)$/.test(x)) return 'implement:'+x.toLowerCase();
+    return 'never:'+x; });
+}
 /* "wearing" conditions on rules: armor:heavy, weapon:light blade, SLOT:off hand, an item's name... */
 function wearContext(ch){
   const db=RULES.db, eq=ch.equip||{}, items=ch.items||[];
@@ -571,6 +580,7 @@ function wearContext(ch){
       return sp(body,'Armor Category').toLowerCase()===rest || body.name.toLowerCase().startsWith(rest);
     }
     if(kind==='weapon') return weapons.some(w=>rest.split(',').every(c=>wfit(w,c)));
+    if(kind==='offhand') return !!(off && off.type==='Weapon' && rest.split(',').every(c=>wfit(off,c)));
     if(kind==='only-weapon') return weapons.length===1 && rest.split(',').every(c=>wfit(weapons[0],c));
     if(kind==='implement') return implKinds.has(rest);
     if(kind==='slot') return filled.has({'off hand':'off','off-hand':'off','main hand':'main'}[rest]||rest);
@@ -578,7 +588,7 @@ function wearContext(ch){
     if(kind==='dual-wielding') return weapons.length===2 && (!rest || weapons.every(w=>rest.split(',').some(c=>wfit(w,c.replace(/-blade$/,'')))));
     return false;
   };
-  return {ok, body, shield, weapons};
+  return {ok, body, shield, weapons, main, off};
 }
 
 /* A power card as the character has it now: level entries such as "Fey Beast Companion: Fey Panther 3"

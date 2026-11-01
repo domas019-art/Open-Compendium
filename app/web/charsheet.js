@@ -788,6 +788,16 @@ Object.assign(Builder,{
       if(w && /\(ranged/i.test(line) && !/melee/i.test(sp(w,'Weapon Category'))){ const r=/(\w+)\s+vs\.?\s*\w+\s*\(ranged/i.exec(line); if(r && ABILITIES.includes(r[1])) abil=[r[1]]; }
       if(w){
         ctx.add(w.name.toLowerCase()); ctx.add(w.id.toLowerCase()); if(magic) ctx.add(magic.id.toLowerCase());
+        // fighting with two weapons, or with one in both hands (Two-Weapon Fighting, Tempest Technique, two-handed feats)
+        if(w!==UNARMED){
+          const wc=wearContext(this.ch), isMelee=x=>x && x.type==='Weapon' && /melee/i.test(sp(x,'Weapon Category'));
+          const dual=isMelee(wc.main) && isMelee(wc.off), close=/close/.test(kind);
+          if(dual && isMelee(w) && kind!=='ranged'){
+            ctx.add('two-weapon'); ctx.add('two-melee'); ctx.add(close?'two-melee-weapon-close':'two-melee-weapon');
+            if(/off-?hand/i.test(sp(w,'Properties'))) ctx.add(close?'two-melee-offhand-close':'two-melee-offhand');
+          }
+          if(/two/i.test(sp(w,'Hands Required'))){ ctx.add('two-hands'); ctx.add('two-handed'); }
+        }
         for(const g of sp(w,'Group').split(/\s*,\s*/).filter(Boolean)){ ctx.add(g.toLowerCase()+' group'); ctx.add(g.toLowerCase()); }
         // a ranged basic attack with a heavy thrown weapon uses Strength
         if(basic && kind==='ranged' && /heavy thrown/i.test(sp(w,'Properties'))){ abil=['Strength']; dAbils=dAbils.map(()=>['Strength']); }
