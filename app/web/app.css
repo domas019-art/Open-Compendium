@@ -654,3 +654,4 @@ body.sheetmode #bSheet{display:none}
 .makebox{margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
 .makebox .makerow{gap:8px;align-items:center;margin:4px 0}
 .makebox .makerow .grow{flex:1}
+#pop .pknums{margin:8px 0}

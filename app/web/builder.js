@@ -859,10 +859,10 @@ const Builder={
       ...[['AC','AC'],['Fort','Fortitude Defense'],['Ref','Reflex Defense'],['Will','Will Defense'],['HP','Hit Points']].map(([l,n])=>el('span',{class:'pkstat'}, el('small',{text:l}), el('b',{text:sv(n)}))));
   },
   // a power's worked-out numbers with this character's weapons, and how they're made up (as on the sheet)
-  powerNumbers(p){
+  powerNumbers(p,quiet){
     let calc; try{ calc=this.powerCalc(p); }catch(e){ return null; }
     const box=el('div',{class:'pknums'}, el('h4',{text:'Your numbers'}));
-    if(!calc.rows?.length){ box.append(el('p',{class:'muted small',text:calc.note || 'No attack roll to work out.'})); return box; }
+    if(!calc.rows?.length){ if(quiet) return null; box.append(el('p',{class:'muted small',text:calc.note || 'No attack roll to work out.'})); return box; }
     for(const r of calc.rows.slice(0,3)){
       box.append(el('div',{class:'pknum'},
         el('div',{}, el('b',{text:(r.weapon && r.weapon!=='—' ? r.weapon+': ' : '')+fmt(r.atk)+' vs '+r.def}), r.dmg ? ' · '+r.dmg+' damage' : ''),

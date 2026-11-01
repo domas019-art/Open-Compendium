@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.71';
+const APP_VERSION = '0.72';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -471,7 +471,12 @@ function openPop(el){
   const r=el.getBoundingClientRect(), p=$('#pop');
   const host=document.querySelector('dialog[open]')||document.body;   // a popup must sit inside an open dialog to be visible
   if(p.parentElement!==host) host.append(p);
-  if(el.dataset.rid) Builder.renderElement(p, el.dataset.rid);
+  if(el.dataset.rid){
+    Builder.renderElement(p, el.dataset.rid);
+    // a power the character has (chosen or gained automatically): its worked-out numbers under the text
+    const e=RULES.db?.els[el.dataset.rid];
+    if(e?.type==='Power' && Builder.ch && Builder.st?.granted.has(e.id)){ const nb=Builder.powerNumbers(e, true); if(nb){ const h=p.querySelector('h1'), f=h?.nextElementSibling?.matches('.flavor') ? h.nextElementSibling : h; f ? f.after(nb) : p.append(nb); } }
+  }
   else renderInto(p, el.dataset.cat, el.dataset.id);
   p.hidden=false; p.scrollTop=0;
   p.style.left=Math.max(8,Math.min(r.left, innerWidth-p.offsetWidth-8))+'px';
