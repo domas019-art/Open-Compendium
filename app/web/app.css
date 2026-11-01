@@ -130,7 +130,7 @@ tr.row.on{background:var(--sel)}
 .hb{display:inline-block;background:#7b4bb7;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;letter-spacing:.02em}
 .hb.small{padding:0 6px;font-size:10px;margin-left:4px;vertical-align:middle}
 .btn.small{padding:3px 10px;font-size:13px}
-.abil{display:grid;grid-template-columns:minmax(110px,1fr) 90px 56px 48px;gap:6px 10px;align-items:center;margin:10px 0}
+.abil{display:grid;grid-template-columns:minmax(110px,1fr) 90px 52px 56px 48px;gap:6px 10px;align-items:center;margin:10px 0}
 .abil .h{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .abil input,.abil select,.bcard>select,.slot select{padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .abil input{width:80px}
@@ -195,7 +195,7 @@ tr.row.on{background:var(--sel)}
   .pkbody{grid-template-columns:1fr;grid-template-rows:45% 55%}
   #pkList{border-right:0;border-bottom:1px solid var(--line)}
   .stats{grid-template-columns:repeat(2,1fr)}
-  .abil{grid-template-columns:1fr 80px 44px 40px}
+  .abil{grid-template-columns:1fr 80px 40px 44px 40px}
   .skills{grid-template-columns:1fr auto}
   #picker{width:100vw;height:100vh;max-width:100vw;max-height:100vh;border-radius:0}
 }
@@ -630,3 +630,22 @@ body.sheetmode #bSheet{display:none}
 /* reordering folders: a line shows where the dragged folder will go */
 .frow.dragging{opacity:.45}
 .frow.insabove{box-shadow:inset 0 2px 0 var(--accent)} .frow.insbelow{box-shadow:inset 0 -2px 0 var(--accent)}
+
+/* Ability scores: key abilities and racial modifiers */
+.abilinfo{display:flex;flex-direction:column;gap:6px;margin:4px 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.abilinfo .slot{margin:4px 0 0}
+.abil .an.key{font-weight:700}
+.abil .keydot{color:var(--accent)}
+.setdirect{margin-top:12px}
+
+/* the choice window: the character's scores on top, a power's numbers below its text */
+.pkstats{display:flex;flex-wrap:wrap;gap:4px;align-items:stretch;margin:0 0 10px}
+.pkstat{display:flex;flex-direction:column;align-items:center;min-width:44px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);line-height:1.15}
+.pkstat small{font-size:10px;color:var(--muted);letter-spacing:.05em}
+.pkstat em{font-style:normal;font-size:11px;color:var(--muted)}
+.pksep{width:8px}
+.pknums{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.pknums h4{margin:0 0 6px}
+.pknum{margin:6px 0 10px}
+.pknum ul{margin:2px 0 0;padding-left:18px;font-size:13px}
+.pknum small{color:var(--muted)}

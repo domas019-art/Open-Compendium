@@ -252,6 +252,22 @@ function implementGroups(st){
   }
   return st._implGroups=g;
 }
+/* Versatile Expertise lists every weapon group and implement type. Only the ones the character can actually use are
+   offered: weapon groups with at least one weapon they're proficient with, implements they're proficient with. (The
+   others are still legal, so "Show everything available" lists them without marking them homebrew.) */
+function veRelevant(slot,e,st){
+  if(!/^Versatile Expertise (Weapon Group|Implement)$/.test(slot.cat)) return true;
+  const what=((/\(([^)]+)\)\s*$/.exec(e.name)||[])[1]||'').toLowerCase(), base=w=>w.replace(/(es|s)$/,'');
+  if(slot.cat==='Versatile Expertise Weapon Group' || (e.cats||[]).includes(VE_WEAPON_GROUP)){
+    if(slot.cat==='Versatile Expertise Implement') return true;          // weapon groups as implements: checked by veImplementOk
+    if(!st._profGroups){ st._profGroups=new Set();
+      for(const id of RULES.db.byType.Weapon||[]){ const w=RULES.db.els[id]; if(!w || /\+\d|secondary end|shield|rod of seven|\((heroic|paragon|epic) tier\)/i.test(w.name) || !Builder.profOk(w)) continue;
+        sp(w,'Group').split(',').forEach(g=>g.trim() && st._profGroups.add(g.trim().toLowerCase())); } }
+    return st._profGroups.has(what);
+  }
+  const ig=implementGroups(st);
+  return [...ig].some(x=>base(x)===base(what) || x.startsWith(base(what)) || base(what).startsWith(base(x)));
+}
 function veImplementOk(slot,e,st){
   if(slot.cat!=='Versatile Expertise Implement' || !(e.cats||[]).includes(VE_WEAPON_GROUP)) return true;
   const grp=(/\(([^)]+)\)\s*$/.exec(e.name)||[])[1]||'';

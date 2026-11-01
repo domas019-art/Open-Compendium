@@ -14,7 +14,7 @@ const SECTIONS=[['start','Start'],['build','Build'],['shop','Shop'],['manage','M
 const STEPS=[['class','Class'],['race','Race'],['background','Background'],['abilities','Ability Scores'],['skills','Skills'],['powers','Powers'],['feats','Feats']];
 const STEP_HAS_SHOWALL=new Set(['class','race','background','skills','powers','feats']);
 // where each kind of choice is shown
-const TYPE_STEP={'CountsAsRace':'race','Paragon Path':'class','Epic Destiny':'class','Class':'class','Build':'class','Deity':'class','Theme':'class','Race':'race','Race Ability Bonus':'race','Language':'race',
+const TYPE_STEP={'CountsAsRace':'race','Paragon Path':'class','Epic Destiny':'class','Class':'class','Build':'class','Deity':'class','Theme':'class','Race':'race','Race Ability Bonus':'abilities','Language':'race',
   'Background':'background','Background Choice':'background','Gender':'background','Alignment':'background','Skill Training':'skills','Power':'powers','Feat':'feats'};
 // for other choices, look at what they came from
 const OWNER_STEP={'Feat':'feats','Power':'powers','Race':'race','Racial Trait':'race','Class':'class','Class Feature':'class','Build':'class','Theme':'class','Background':'background','Background Choice':'background','Deity':'class'};
@@ -231,9 +231,9 @@ const Builder={
       .map(e=>{
         const pre=prereqOk(e,this.st), book=this.bookOk(e), house=isHouseRule(e), impl=veImplementOk(slot,e,this.st);
         const ok=pre && book && !slot.extra && !house && impl;
-        return {el:e, ok, why: slot.extra ? 'extra house-rule slot' : house ? 'house rule' : !pre ? 'prerequisites not met' : !book ? 'book not selected' : !impl ? 'a weapon group, not one of your implements' : ''};
+        return {el:e, ok, hide:!veRelevant(slot,e,this.st), why: slot.extra ? 'extra house-rule slot' : house ? 'house rule' : !pre ? 'prerequisites not met' : !book ? 'book not selected' : !impl ? 'a weapon group, not one of your implements' : ''};
       })
-      .filter(o=>o.ok || showAll || slot.extra && prereqOk(o.el,this.st) || picks.includes(o.el.id))
+      .filter(o=>(o.ok && !o.hide) || showAll || slot.extra && prereqOk(o.el,this.st) || picks.includes(o.el.id))
       .sort((a,b)=>(b.ok-a.ok) || (/^(Race Ability Bonus|Ability Increase)/.test(slot.type) ? ABILITIES.indexOf(a.el.name)-ABILITIES.indexOf(b.el.name) : 0)
                    || a.el.name.localeCompare(b.el.name,undefined,{numeric:true}));
   },
@@ -497,7 +497,7 @@ const Builder={
       el('div',{class:'brow wrap',style:'margin-top:10px'}, amount, el('button',{class:'btn primary',type:'button',text:'Add experience',onclick:add}),
         el('span',{class:'muted small',text:'The level goes up automatically when you have enough.'})),
       this.levelMsg ? el('p',{class:'lvlmsg',text:this.levelMsg}) : null,
-      el('details',{}, el('summary',{text:'Set level or experience directly'}),
+      el('div',{class:'setdirect'}, el('h4',{class:'lvlhead',text:'Set level or experience directly'}),
         el('div',{class:'brow wrap'}, el('label',{class:'muted small',text:'Level'}), this.levelSelect(),
           el('label',{class:'muted small',text:'Experience'}), (()=>{ const i=el('input',{type:'number',min:0,value:xp,class:'xpin'}); i.onchange=()=>{ ch.xp=Math.max(0,+i.value||0); ch.level=levelForXp(ch.xp); this.changed(); }; return i; })())));
     // choices still open, newest level first
@@ -567,7 +567,7 @@ const Builder={
         const box=el('div',{class:'autolist'}, el('h4',{class:'lvlhead',text:'Gained automatically (no choice needed)'}));
         for(const e of auto.sort((a,b)=>(this.st.lvl.get(a.id)||1)-(this.st.lvl.get(b.id)||1)||a.name.localeCompare(b.name))){
           const src=RULES.db.els[this.st.via.get(e.id)];
-          box.append(el('div',{class:'autorow'}, el('span',{},usageDot(e),el('span',{class:'term',dataset:{rid:e.id},text:e.name})),
+          box.append(el('div',{class:'autorow'}, el('span',{},usageDot(e),el('span',{class:'term',dataset:{rid:e.id},text:e.name}), e.spec['Power Usage']?el('span',{class:'muted small',text:' · '+e.spec['Power Usage'].trim()}):null),
             el('span',{class:'muted small',text:(src && !/^(Level|Level1Rules)$/.test(src.type) ? 'from '+src.name : this.st.via.get(e.id)==='start' ? 'from Optional details (Start)' : 'everyone has this')+((this.st.lvl.get(e.id)||1)>1?' · level '+this.st.lvl.get(e.id):'')})));
         }
         card.append(box);
@@ -679,7 +679,7 @@ const Builder={
   },
 
   abilitiesStep(){
-    const inc=this.slotsFor('abilities');
+    const inc=this.slotsFor('abilities').filter(s=>s.type!=='Race Ability Bonus');
     const card=inc.length ? el('div',{class:'bcard'}, el('h3',{text:'Ability increases'}),
       el('p',{class:'muted small',text:'At levels 11 and 21 every ability also goes up by 1 automatically.'}), ...inc.flatMap(sl=>[el('h4',{class:'lvlhead',text:'Level '+sl.level}), this.slotRow(sl)])) : null;
     return [this.abilityCard(), card];
@@ -704,8 +704,19 @@ const Builder={
       if(v.startsWith('array')){ ch.method='array'; ch.arrayIdx=+v.slice(5); curArray(ch).forEach((n,i)=>ch.abilities[ABILITIES[i]]=n); }
       else{ ch.method=v; if(v==='points') ch.abilities={Strength:10,Constitution:10,Dexterity:10,Intelligence:10,Wisdom:10,Charisma:8}; }
       this.changed(); };
+    // what matters for this character: the class's key abilities, and what the race adds
+    const granted=[...st.granted.values()];
+    const classes=granted.filter(e=>/^(Class|Hybrid Class)$/.test(e.type));
+    const keys=new Set(classes.flatMap(c=>String(sp(c,'Key Abilities')).split(/,|\band\b/).map(x=>x.trim()).filter(x=>ABILITIES.includes(x))));
+    const race=granted.find(e=>e.type==='Race');
+    const info=el('div',{class:'abilinfo'},
+      el('div',{}, el('b',{text:'Key abilities: '}), keys.size ? [...keys].join(', ') : el('span',{class:'muted',text:'choose a class first'}),
+        classes.length ? el('span',{class:'muted small',text:' ('+classes.map(c=>c.name).join(', ')+')'}) : null),
+      el('div',{}, el('b',{text:'Racial modifiers: '}), race ? (sp(race,'Ability Scores')||'none').trim() : el('span',{class:'muted',text:'choose a race first'})));
+    const bonus=this.slotsFor('abilities').filter(s=>s.type==='Race Ability Bonus');
+    for(const s of bonus) info.append(this.slotRow(s));
     const grid=el('div',{class:'abil'});
-    grid.append(el('span',{class:'h',text:''}),el('span',{class:'h',text:'Base'}),el('span',{class:'h',text:'Final'}),el('span',{class:'h',text:'Mod'}));
+    grid.append(el('span',{class:'h',text:''}),el('span',{class:'h',text:'Base'}),el('span',{class:'h',text:'Bonus'}),el('span',{class:'h',text:'Final'}),el('span',{class:'h',text:'Mod'}));
     for(const a of ABILITIES){
       let input;
       if(ch.method==='array'){
@@ -717,16 +728,17 @@ const Builder={
         input=el('input',{type:'number','aria-label':a,value:ch.abilities[a],min:ch.method==='points'?8:1,max:ch.method==='points'?18:30});
         input.onchange=()=>{ ch.abilities[a]=+input.value||10; this.changed(); };
       }
-      const fin=st.stat(a), mod=Math.floor((fin-10)/2);
-      grid.append(el('span',{class:'an',text:a}), input, el('b',{text:fin}), el('span',{text:(mod>=0?'+':'')+mod}));
+      const fin=st.stat(a), mod=Math.floor((fin-10)/2), add=fin-(+ch.abilities[a]||0), key=keys.has(a);
+      grid.append(el('span',{class:'an'+(key?' key':''),title:key?'A key ability for your class':''},a,key?el('span',{class:'keydot',text:' ★'}):null), input,
+        el('span',{class:'muted',text:add?(add>0?'+':'')+add:'—'}), el('b',{text:fin}), el('span',{text:(mod>=0?'+':'')+mod}));
     }
-    card.append(this.stepHeader('abilities','Ability scores'), method, grid);
+    card.append(this.stepHeader('abilities','Ability scores'), info, method, grid);
     if(ch.method==='points'){
       const r=pointBuy(ch.abilities);
       card.append(el('p',{class: r.cost>22||r.bad ? 'warn' : 'muted',
         text: r.bad ? 'Point buy: one score may be 8 or 9, the others must be 10–18.' : `Points spent: ${r.cost} of 22`}));
     }
-    card.append(el('p',{class:'muted small',text:'Final scores include racial bonuses (chosen on the Race step).'}));
+    card.append(el('p',{class:'muted small',text:'★ marks your class\'s key abilities. Bonus is what your race (and level increases) add; Final is the score you play with.'}));
     return card;
   },
 
@@ -833,9 +845,34 @@ const Builder={
       onclick:()=>{ this.setPick(slot,o.el.id,true); $('#picker').close(); }}));
     if(!o.ok) bar.append(el('span',{class:'hb',text:'Homebrew: '+o.why}));
     const body=el('div',{class:'entry'});
-    box.append(bar, body);
+    box.append(bar, this.statStrip(), body);
     this.renderElement(body,o.el.id);
+    if(o.el.type==='Power') box.append(this.powerNumbers(o.el));
     box.scrollTop=0;
+  },
+  // the character's scores and defenses, at the top of the choice window (the sheet beside it is covered)
+  statStrip(){
+    const st=this.st, sv=n=>this.sv ? this.sv(n) : st.stat(n), m=a=>Math.floor((st.stat(a)-10)/2);
+    return el('div',{class:'pkstats'},
+      ...ABILITIES.map(a=>el('span',{class:'pkstat'}, el('small',{text:a.slice(0,3).toUpperCase()}), el('b',{text:st.stat(a)}), el('em',{text:fmt(m(a))}))),
+      el('span',{class:'pksep'}),
+      ...[['AC','AC'],['Fort','Fortitude Defense'],['Ref','Reflex Defense'],['Will','Will Defense'],['HP','Hit Points']].map(([l,n])=>el('span',{class:'pkstat'}, el('small',{text:l}), el('b',{text:sv(n)}))));
+  },
+  // a power's worked-out numbers with this character's weapons, and how they're made up (as on the sheet)
+  powerNumbers(p){
+    let calc; try{ calc=this.powerCalc(p); }catch(e){ return null; }
+    const box=el('div',{class:'pknums'}, el('h4',{text:'Your numbers'}));
+    if(!calc.rows?.length){ box.append(el('p',{class:'muted small',text:calc.note || 'No attack roll to work out.'})); return box; }
+    for(const r of calc.rows.slice(0,3)){
+      box.append(el('div',{class:'pknum'},
+        el('div',{}, el('b',{text:(r.weapon && r.weapon!=='—' ? r.weapon+': ' : '')+fmt(r.atk)+' vs '+r.def}), r.dmg ? ' · '+r.dmg+' damage' : ''),
+        el('div',{class:'howcols'},
+          el('div',{}, el('small',{text:'Attack bonus'}), el('ul',{}, ...r.atkParts.map(([v,l])=>el('li',{text:`${fmt(v)} ${l}`})))),
+          r.dmg ? el('div',{}, el('small',{text:'Damage'}), el('ul',{}, ...(r.dice?[el('li',{text:r.dice+' '+r.diceNote})]:[]), ...r.dmgParts.map(([v,l])=>el('li',{text:`${fmt(v)} ${l}`})))) : null)));
+    }
+    if(calc.rows.length>3) box.append(el('p',{class:'muted small',text:`…and ${calc.rows.length-3} more weapons on the Character Sheet.`}));
+    if(calc.note) box.append(el('p',{class:'muted small',text:calc.note}));
+    return box;
   },
 
   /* ---------- showing an element: compendium entry if there is one, otherwise the builder's own text ---------- */
@@ -852,7 +889,7 @@ const Builder={
     const h=el('h1',{class:cls},e.name); if(e.spec['Display']) h.append(el('span',{class:'level',text:e.spec['Display']}));
     box.append(h);
     if(e.flavor) box.append(el('p',{class:'flavor'},el('i',{text:e.flavor})));
-    const pre=e.ppre||(e.pre && !/^~/.test(e.pre) && !/^ID_/.test(e.pre) ? e.pre : '');
+    const pre=readablePre(e);
     if(pre) box.append(el('p',{},el('b',{text:'Prerequisite: '}),pre));
     for(const [k,v] of Object.entries(e.type==='Power' && this.st?.granted.has(e.id) ? modSpec(e,this.st) : e.spec)){
       if(k[0]==='_' || ['Display','Class','Level','Power Usage','Short Description','type','Type','Container'].includes(k) || /^ID_/.test(v)) continue;
@@ -988,7 +1025,7 @@ function metaLine(e){
   if(e.type==='Power') bits.push(s['Display']||'', s['Power Usage']||'', s['Action Type']||'');
   else if(e.type==='Feat') bits.push(s['Short Description']||'');
   else if(e.type==='Background') bits.push(s['Associated Skills']?'Skills: '+s['Associated Skills']:'');
-  if(e.pre && !/^~/.test(e.pre) && !/^ID_/.test(e.pre)) bits.push('Prereq: '+e.pre.replace(/\s+/g,' ').slice(0,80));
+  const rp=readablePre(e); if(rp) bits.push('Prereq: '+rp.slice(0,80));
   bits.push(e.source||'');
   return bits.filter(Boolean).join(' · ');
 }
@@ -1094,13 +1131,21 @@ function specRow(k,v){
   }
   return out;
 }
+// a prerequisite as a person would write it: the builder's own bookkeeping ("!Deity of the Arcana domain" = has no
+// other deity yet, "~...", "ID_...") is left out
+function readablePre(e){
+  const t=(e.ppre||e.pre||'').replace(/\s+/g,' ').trim();
+  if(!t || /^~/.test(t) || /^ID_/.test(t)) return '';
+  return t.split(/\s*,\s*/).filter(c=>c && !/^!/.test(c) && !/^ID_/.test(c)).join(', ');
+}
 function renderPowerCard(box,e){
   const usage=(e.spec['Power Usage']||'').toLowerCase();
   const cls=/at-will/.test(usage)?'atwillpower':/encounter/.test(usage)?'encounterpower':/daily/.test(usage)?'dailypower':'player';
   const h=el('h1',{class:cls},e.name); if(e.spec['Display']) h.append(el('span',{class:'level',text:e.spec['Display']}));
   box.append(h);
   if(e.flavor) box.append(el('p',{class:'flavor'},el('i',{text:e.flavor})));
-  for(const [k,v] of Object.entries(e.spec)){ if(k[0]==='_' || /^(Display|Class|Short Description|type|Type|Container|Power Usage|Power Type|Level)$/.test(k) || !v || /^ID_/.test(v)) continue;
+  if(e.spec['Power Usage']) box.append(el('p',{class:'powerstat'}, el('b',{text:e.spec['Power Usage'].trim()}), e.spec['Keywords'] ? ' ✦ '+e.spec['Keywords'].trim() : ''));
+  for(const [k,v] of Object.entries(e.spec)){ if(k[0]==='_' || /^(Display|Class|Short Description|type|Type|Container|Power Usage|Power Type|Level|Keywords)$/.test(k) || !v || /^ID_/.test(v)) continue;
     box.append(...specRow(k,v)); }
   if(e.text) for(const para of e.text.split(/\n\s*/)) if(para.trim()) box.append(el('p',{text:para.trim()}));
 }
@@ -1267,9 +1312,16 @@ $('#picker').addEventListener('close',()=>closePop());
   if(Object.keys(lib).length || RULES.db) start(); else noLibrary();
   colourAllFromFolder();
   // the program noticed a change in its folders
-  OC.onFolderChanged(which=>{
-    if(which==='Libraries') libraryChangedBar();
-    else { colourAllFromFolder(); if(Builder.section==='manage') Builder.render(); }
+  // (Windows also reports the folder as changed when pictures in it are only looked at: redraw only when the list of
+  //  pictures really changed, otherwise the gallery would jump back to the top while you scroll)
+  let picSig=null;
+  const portraitSig=async()=>{ try{ return JSON.stringify(await (await fetch('/_list/portraits')).json()); }catch(e){ return null; } };
+  portraitSig().then(s=>{ picSig=s; });
+  OC.onFolderChanged(async which=>{
+    if(which==='Libraries') return libraryChangedBar();
+    const s=await portraitSig(); if(s===picSig) return; picSig=s;
+    colourAllFromFolder();
+    if(Builder.section==='manage'){ const r=$('#bChoices'), y=r.scrollTop; Builder.render(); r.scrollTop=y; }
   });
   // save anything not yet saved when the window closes, or before the page reloads
   OC.onFlush(async()=>{ if(Builder.dirty) await Builder.persist(); });
