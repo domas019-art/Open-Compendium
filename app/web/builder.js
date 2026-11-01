@@ -863,14 +863,21 @@ const Builder={
     let calc; try{ calc=this.powerCalc(p); }catch(e){ return null; }
     const box=el('div',{class:'pknums'}, el('h4',{text:'Your numbers'}));
     if(!calc.rows?.length){ if(quiet) return null; box.append(el('p',{class:'muted small',text:calc.note || 'No attack roll to work out.'})); return box; }
-    for(const r of calc.rows.slice(0,3)){
+    // the weapons in hand first, then unarmed; with nothing in hand, the first weapon carried
+    const ch=this.ch, held=new Set(['main','off'].map(k=>(ch.items||[]).find(x=>x.uid===ch.equip?.[k])).filter(Boolean).map(it=>{ const {base,magic}=itemParts(it); return magic&&base?itemName({ids:[base.id,magic.id]}):base?.name; }));
+    const un=calc.rows.filter(r=>r.weapon==='Unarmed'), armed=calc.rows.filter(r=>r.weapon!=='Unarmed');
+    let show=armed.filter(r=>held.has(r.weapon));
+    if(!show.length) show=armed.slice(0,1);
+    show=[...show, ...un]; if(!show.length) show=calc.rows.slice(0,1);
+    const more=calc.rows.length-show.length;
+    for(const r of show){
       box.append(el('div',{class:'pknum'},
         el('div',{}, el('b',{text:(r.weapon && r.weapon!=='—' ? r.weapon+': ' : '')+fmt(r.atk)+' vs '+r.def}), r.dmg ? ' · '+r.dmg+' damage' : ''),
         el('div',{class:'howcols'},
           el('div',{}, el('small',{text:'Attack bonus'}), el('ul',{}, ...r.atkParts.map(([v,l])=>el('li',{text:`${fmt(v)} ${l}`})))),
           r.dmg ? el('div',{}, el('small',{text:'Damage'}), el('ul',{}, ...(r.dice?[el('li',{text:r.dice+' '+r.diceNote})]:[]), ...r.dmgParts.map(([v,l])=>el('li',{text:`${fmt(v)} ${l}`})))) : null)));
     }
-    if(calc.rows.length>3) box.append(el('p',{class:'muted small',text:`…and ${calc.rows.length-3} more weapons on the Character Sheet.`}));
+    if(more>0) box.append(el('p',{class:'muted small',text:`…and ${more} more weapon${more>1?'s':''} carried: see the Character Sheet.`}));
     if(calc.note) box.append(el('p',{class:'muted small',text:calc.note}));
     return box;
   },

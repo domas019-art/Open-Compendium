@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.72';
+const APP_VERSION = '0.73';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -475,7 +475,7 @@ function openPop(el){
     Builder.renderElement(p, el.dataset.rid);
     // a power the character has (chosen or gained automatically): its worked-out numbers under the text
     const e=RULES.db?.els[el.dataset.rid];
-    if(e?.type==='Power' && Builder.ch && Builder.st?.granted.has(e.id)){ const nb=Builder.powerNumbers(e, true); if(nb){ const h=p.querySelector('h1'), f=h?.nextElementSibling?.matches('.flavor') ? h.nextElementSibling : h; f ? f.after(nb) : p.append(nb); } }
+    if(e?.type==='Power' && Builder.ch && Builder.st?.granted.has(e.id)){ const nb=Builder.powerNumbers(e, true); if(nb){ const pub=p.querySelector('.publishedIn'); pub ? pub.before(nb) : p.append(nb); } }
   }
   else renderInto(p, el.dataset.cat, el.dataset.id);
   p.hidden=false; p.scrollTop=0;
