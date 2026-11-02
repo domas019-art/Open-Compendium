@@ -279,6 +279,15 @@ function createWindow() {
   });
   win.webContents.on('zoom-changed', (e, dir) => { const wc = win.webContents; wc.setZoomFactor(Math.max(0.5, Math.min(3, wc.getZoomFactor() + (dir === 'in' ? 0.1 : -0.1)))); });
 
+  // right-click: cut, copy and paste in text boxes, copy on selected text
+  win.webContents.on('context-menu', (e, p) => {
+    const t = [];
+    if (p.isEditable) t.push({ role: 'cut', label: 'Cut', enabled: p.editFlags.canCut }, { role: 'copy', label: 'Copy', enabled: p.editFlags.canCopy },
+      { role: 'paste', label: 'Paste', enabled: p.editFlags.canPaste }, { type: 'separator' }, { role: 'selectAll', label: 'Select all' });
+    else if (p.selectionText && p.selectionText.trim()) t.push({ role: 'copy', label: 'Copy' });
+    if (t.length) Menu.buildFromTemplate(t).popup({ window: win });
+  });
+
   win.loadURL('oc://app/index.html');
   watchFolders(win);
   return win;

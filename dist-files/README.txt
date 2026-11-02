@@ -1,4 +1,4 @@
-Open Compendium 0.75
+Open Compendium 0.76
 ====================
 
 Double-click "Open Compendium.exe". Nothing needs to be installed, and the whole folder can be

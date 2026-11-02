@@ -438,7 +438,7 @@ Object.assign(Builder,{
 
   /* ---------- your equipment ---------- */
   inventoryCard(){
-    const S=this.shop, ch=this.ch, items=ch.items||[];
+    const S=this.shop, ch=this.ch, items=(ch.items||[]).filter(it=>!it.freebie);    // a pact weapon is not bought or sold
     const where={}; for(const [s,u] of Object.entries(ch.equip||{})) (where[u] ||= []).push(EQUIP_SLOTS.find(x=>x[0]===s)?.[1]||s);
     const total=items.reduce((a,it)=>a+itemWeight(it)*it.qty,0), str=this.st.stat('Strength');
     const load=total>str*20 ? 'over your heavy load (slowed)' : total>str*10 ? 'heavy load (slowed)' : 'normal load';

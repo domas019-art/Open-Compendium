@@ -85,8 +85,8 @@ const Builder={
     let cur=null; try{ cur=localStorage.getItem('open-compendium-char'); this.step=localStorage.getItem('open-compendium-step')||'class'; }catch(e){}
     this.section='start';      // the builder always opens on Start, where the character is chosen
     if(!STEPS.some(([k])=>k===this.step)) this.step='class';
-    this.ch=this.chars[cur] || Object.values(this.chars)[0] || newChar();
-    this.fixup(this.ch);
+    // the builder opens with no character: one is opened from the list, or a new one made
+    this.ch=this.fixup(newChar()); this.none=true;
     if(!Object.keys(this.chars).length) this.step='class';
   },
   fixup(c){ if(typeof c.showAll!=='object' || !c.showAll) c.showAll={}; c.extra ||= {}; c.hb ||= {}; c.picks ||= {};
@@ -97,6 +97,15 @@ const Builder={
     return c; },
 
   show(){ this.render(); },
+  // open a character (or a new one): the shop's search and the Manage tab start fresh; a new character starts on Class
+  openChar(c,isNew){
+    if(!this.none && (this.chars[this.ch.id]||this.dirty)) this.persist();
+    this.none=false; this.ch=this.fixup(c);
+    this.shop={...this.shop, q:'', sel:null, base:null, qty:1, limit:200, inv:null, rsel:null};
+    this.mtab='details';
+    if(isNew) this.step='class';
+    this.go('start');
+  },
   go(step){
     if(SECTIONS.some(([k])=>k===step)) this.section=step; else { this.section='build'; this.step=step; }
     try{ localStorage.setItem('open-compendium-step',this.step); }catch(e){}
@@ -104,6 +113,7 @@ const Builder={
 
   changed(){
     this.render();
+    if(this.none) return;
     this.dirty=true;
     clearTimeout(this.saveTimer);
     this.saveTimer=setTimeout(()=>this.persist(),400);
@@ -115,6 +125,7 @@ const Builder={
     this.ch.homebrew=st ? this.isHomebrew() : false;
   },
   async persist(){
+    if(this.none) return;
     this.summarize();
     if(typeof syncCoins==='function') syncCoins(this.ch);
     this.chars[this.ch.id]=this.ch;
@@ -280,12 +291,13 @@ const Builder={
       (this.ch.picks[one[0].key] ||= []).push(one[1][0].el.id);
       this.st=evaluate(this.ch);
     }
+    if(!this.none && this.giveFreebies()) this.st=evaluate(this.ch);
     let body;
     if(this.section==='start') body=this.startStep();
     else if(this.section==='shop') body=this.shopStep();
     else if(this.section==='manage') body=this.manageStep();
     else if(this.section==='sheet') body=this.sheetStep();
-    else body=({abilities:()=>this.abilitiesStep(), skills:()=>this.skillsStep()}[this.step] || (()=>this.choiceStep(this.step)))();
+    else body=[...({abilities:()=>this.abilitiesStep(), skills:()=>this.skillsStep()}[this.step] || (()=>this.choiceStep(this.step)))(), this.nextBar()];
     // lists keep their scroll position when the screen is redrawn
     const keep={}; root.querySelectorAll('[data-keep]').forEach(x=>keep[x.dataset.keep]=x.scrollTop);
     root.replaceChildren(this.stepNav(), ...body.filter(Boolean));
@@ -311,8 +323,8 @@ const Builder={
     const total=STEPS.reduce((a,[k])=>a+this.openIn(k),0);
     const secs=el('nav',{class:'sections'});
     for(const [k,label] of SECTIONS)
-      secs.append(el('button',{type:'button',class:'sec'+(this.section===k?' on':''),onclick:()=>this.go(k)},label,
-        k==='build'&&total?el('span',{class:'need',text:total}):null,
+      secs.append(el('button',{type:'button',class:'sec'+(this.section===k?' on':''),disabled:this.none && k!=='start',title:this.none && k!=='start'?'Open a character first':'',onclick:()=>this.go(k)},label,
+        k==='build'&&total&&!this.none?el('span',{class:'need',text:total}):null,
         // companion choices waiting on Manage > Companion (level-up ability increases...)
         k==='manage'&&this.openIn('companion')?el('span',{class:'need',text:this.openIn('companion')}):null));
     const nav=el('nav',{class:'steps'});
@@ -325,6 +337,42 @@ const Builder={
     return el('div',{class:'stepwrap'}, secs, this.section==='build'?nav:null);
   },
 
+  /* Items a class feature gives (a hexblade's pact weapon: "FREEBEE:<item>"): added and put in the main hand when
+     it is free; taken away again when the feature goes (another pact chosen). They are not in the shop's list. */
+  giveFreebies(){
+    const ch=this.ch, db=RULES.db, want=new Map();
+    for(const e of this.st.granted.values()){ if(/^(Magic Item|Weapon|Armor|Gear)$/.test(e.type)) continue;
+      for(const [t,a] of e.rules||[]) if(t==='statadd' && /^FREEBEE:/.test(a.name||'') && db.els[a.name.slice(8)]) want.set(a.name.slice(8), e.name); }
+    ch.freebies ||= {}; let changed=false;
+    for(const [id,uid] of Object.entries(ch.freebies)){
+      if(want.has(id) && ch.items.some(x=>x.uid===uid)) continue;
+      ch.items=ch.items.filter(x=>x.uid!==uid);
+      for(const [k,u] of Object.entries(ch.equip||{})) if(u===uid) delete ch.equip[k];
+      delete ch.freebies[id]; changed=true;
+    }
+    for(const [id,from] of want){
+      if(ch.freebies[id]) continue;
+      // already there (an imported character has it among its items): that one is the feature's
+      const had=ch.items.find(x=>!x.freebie && x.ids.includes(id));
+      if(had){ had.freebie=from; ch.freebies[id]=had.uid; changed=true; continue; }
+      const fe=db.els[id], kind=baseKind(fe), name=sp(fe,kind).toLowerCase();
+      const b=kind ? (db.byType[kind]||[]).map(x=>db.els[x]).find(x=>x.name.toLowerCase()===name) : null;
+      const it={uid:Math.random().toString(36).slice(2,9), ids:b?[b.id,fe.id]:[fe.id], qty:1, freebie:from};
+      ch.items.push(it); ch.freebies[id]=it.uid; changed=true;
+      ch.equip ||= {}; if(!ch.equip.main){ ch.equip.main=it.uid; }
+    }
+    if(changed) this.dirty=true;
+    return changed;
+  },
+  // "Next" at the foot of each build step, as in the original: only once every required choice here is made (Enter presses it)
+  nextBar(){
+    const i=STEPS.findIndex(([k])=>k===this.step), next=STEPS[i+1];
+    const left=this.openIn(this.step)||(this.step==='abilities' && this.abilityProblem() ? 1 : 0);
+    const label=next ? 'Next: '+next[1] : 'Next: Shop';
+    const b=el('button',{class:'btn primary nextstep',type:'button',disabled:!!left,text:label+' ▸',
+      title:left ? 'Make the choices marked “choose” first' : 'Or press Enter',onclick:()=>next ? this.go(next[0]) : this.go('shop')});
+    return el('div',{class:'nextbar'}, left ? el('span',{class:'muted small',text:typeof left==='number' && left>0 ? `${left} choice${left>1?'s':''} still to make on this page` : ''}) : null, b);
+  },
   stepHeader(step,title){
     const kids=[el('h3',{text:title})];
     if(STEP_HAS_SHOWALL.has(step)) kids.push(el('label',{class:'chk',title:'List everything here, including options you don\'t qualify for or from books you switched off. Anything chosen that way is marked as homebrew.'},
@@ -341,19 +389,21 @@ const Builder={
     const cards=el('div',{class:'cards'});
     for(const c of all.filter(inView)) cards.append(this.charCard(c));
     if(!cards.children.length) cards.append(el('p',{class:'muted small',text:'No characters in this folder yet. Drag one here from another folder, or make a new one.'}));
-    const name=el('input',{type:'text',value:this.ch.name,class:'bname','aria-label':'Character name'});
-    name.oninput=()=>{ this.ch.name=name.value; this.dirty=true;
+    const isDefault=this.ch.name==='New character';
+    const name=el('input',{type:'text',value:isDefault?'':this.ch.name,placeholder:'New character',class:'bname','aria-label':'Character name'});
+    name.oninput=()=>{ this.ch.name=name.value.trim()?name.value:'New character'; this.dirty=true;
       const b=document.querySelector('#bChoices .ccard.on .cname'); if(b) b.textContent=name.value||'Unnamed';
       clearTimeout(this.saveTimer); this.saveTimer=setTimeout(()=>{ this.persist(); this.renderSheet($('#bSheet')); },400); };
     return [
-      el('div',{class:'bcard'}, el('h3',{text:'Current character'}), el('label',{class:'muted small',text:'Name'}), name,
+      this.none ? el('div',{class:'bcard'}, el('h3',{text:'No character open'}), el('p',{class:'muted',text:'Open one from your characters below, or make a new one.'})) : null,
+      this.none ? null : el('div',{class:'bcard'}, el('h3',{text:'Current character'}), el('label',{class:'muted small',text:'Name'}), name,
         el('div',{class:'brow',style:'margin-top:10px'}, el('label',{class:'muted small',text:'Level'}), this.levelSelect(),
           el('span',{class:'muted small',text:'For a new character starting above level 1. During play, add experience under Manage.'}))),
-      this.detailsCard(),
+      this.none ? null : this.detailsCard(),
 
       el('div',{class:'bcard'}, el('div',{class:'stephead'},el('h3',{text:'Your characters'}),
           el('div',{class:'brow'},
-            el('button',{class:'btn primary',type:'button',text:'New character',onclick:()=>{ if(this.chars[this.ch.id]||this.dirty) this.persist(); this.ch=newChar(); this.ch.folder=this.newFolder(); this.go('start'); this.changed(); }}),
+            el('button',{class:'btn primary',type:'button',text:'New character',onclick:()=>{ const c=newChar(); c.folder=this.newFolder(); this.openChar(c,true); this.changed(); }}),
             el('button',{class:'btn',type:'button',text:'Open file…',title:'Open a character saved by this app (.json) or by the original Character Builder (.dnd4e)',onclick:()=>$('#charIn').click()}))),
         el('div',{class:'cfolders'}, this.folderList(all), cards),
         el('p',{class:'muted small',text:'Characters are saved automatically, one file each, in the Characters folder next to the program; each folder here is a folder there. Deleted characters are moved to Characters\\Deleted. Drag a character onto a folder to move it. Tick “Killed” to move a fallen character to the Killed folder. You can also drag character files (.dnd4e or .json) onto this screen to import them.'})),
@@ -363,7 +413,7 @@ const Builder={
 
   // one character card: killed tick (top left), portrait, name, buttons; it can be dragged onto a folder
   charCard(c){
-    const cur=c.id===this.ch.id;
+    const cur=!this.none && c.id===this.ch.id;
     const kill=el('input',{type:'checkbox',checked:!!c.killed,'aria-label':'Killed'});
     kill.onchange=()=>this.setKilled(c,kill.checked);
     const P=Portraits.of(c);
@@ -374,7 +424,7 @@ const Builder={
       el('div',{}, el('b',{class:'cname',text:c.name||'Unnamed'}), c.homebrew?el('span',{class:'hb small',text:'HB'}):null),
       el('div',{class:'muted small',text:c.summary||'Level 1'}),
       el('div',{class:'brow wrap'},
-        cur ? el('span',{class:'muted small',text:'Open now'}) : el('button',{class:'btn small',type:'button',text:'Open',onclick:()=>{ if(this.chars[this.ch.id]||this.dirty) this.persist(); this.ch=this.fixup(c); this.go('start'); }}),
+        cur ? el('span',{class:'muted small',text:'Open now'}) : el('button',{class:'btn small',type:'button',text:'Open',onclick:()=>this.openChar(c)}),
         el('button',{class:'btn small',type:'button',text:'Show file',title:'Show this character\'s file in its folder',onclick:async()=>{ if(cur) await this.persist(); OC.showChar(c.id); }}),
         el('button',{class:'btn small',type:'button',text:'Delete',onclick:()=>this.remove(c)})));
     card.addEventListener('dragstart',e=>{ e.dataTransfer.setData('application/x-oc-char',c.id); e.dataTransfer.effectAllowed='move'; card.classList.add('dragging'); });
@@ -866,7 +916,7 @@ const Builder={
     // the weapons in hand first, then unarmed; with nothing in hand, the first weapon carried
     const ch=this.ch, held=new Set(['main','off'].map(k=>(ch.items||[]).find(x=>x.uid===ch.equip?.[k])).filter(Boolean).map(it=>{ const {base,magic}=itemParts(it); return magic&&base?itemName({ids:[base.id,magic.id]}):base?.name; }));
     const un=calc.rows.filter(r=>r.weapon==='Unarmed'), armed=calc.rows.filter(r=>r.weapon!=='Unarmed');
-    let show=armed.filter(r=>held.has(r.weapon));
+    let show=armed.filter(r=>held.has(r.weapon) || /^(Main|Off) hand: /.test(r.weapon));
     if(!show.length) show=armed.slice(0,1);
     show=[...show, ...un]; if(!show.length) show=calc.rows.slice(0,1);
     const more=calc.rows.length-show.length;
@@ -888,7 +938,7 @@ const Builder={
     if(e.added){ renderPatron(box,e); return; }
     if(e.type==='Magic Item'){ box.replaceChildren(); renderItemCard(box,e,0); linkTerms(box,''); return; }
     const ref=compendiumRef(e);
-    if(ref){ renderInto(box,ref[0],ref[1]); return; }
+    if(ref){ renderInto(box,ref[0],ref[1]); stripRevisions(box); return; }
     box.replaceChildren();
     const usage=(e.spec['Power Usage']||'').toLowerCase();
     const cls=e.type==='Power' ? (/at-will/.test(usage)?'atwillpower':/encounter/.test(usage)?'encounterpower':/daily/.test(usage)?'dailypower':'player')
@@ -910,6 +960,7 @@ const Builder={
 
   /* ---------- character sheet ---------- */
   renderSheet(box){
+    if(this.none){ box.replaceChildren(el('p',{class:'muted pad',text:'No character open.'})); return; }
     const st=this.st, ch=this.ch, s=n=>st.stat(n);
     const race=[...st.granted.values()].find(e=>e.type==='Race'), cls=[...st.granted.values()].find(e=>e.type==='Class');
     const theme=[...st.granted.values()].find(e=>e.type==='Theme');
@@ -968,7 +1019,7 @@ const Builder={
   async importFile(file){
     const text=await file.text();
     if(/^\s*(\ufeff)?\s*</.test(text)){                       // a save file from the original Character Builder
-      try{ const c=importDnd4e(text); c.importInfo.file=file.name; c.folder=this.newFolder(); this.ch=this.fixup(c); this.go('start'); this.changed(); }
+      try{ const c=importDnd4e(text); c.importInfo.file=file.name; c.folder=this.newFolder(); this.openChar(c); this.changed(); }
       catch(e){ alert('Could not import that file: '+e.message); }
       return;
     }
@@ -977,7 +1028,7 @@ const Builder={
       if(!c || !c.picks || !c.abilities) throw new Error('not a character file');
       c.id='c'+Date.now().toString(36);
       c.folder=this.newFolder(); delete c.killed; delete c.folderBeforeKilled;
-      this.ch=this.fixup(c); this.go('start'); this.changed();
+      this.openChar(c); this.changed();
     }catch(e){ alert('That file is not an Open Compendium character.'); }
   },
   async remove(c){
@@ -986,7 +1037,7 @@ const Builder={
     if(!confirm(blank ? `Delete “${c.name}”? Nothing has been chosen for it yet, so it is removed completely.` : `Delete “${c.name}”? Its file is moved to Characters\\Deleted.`)) return;
     if(blank) await OC.purgeChar(c.id);
     delete this.chars[c.id]; await saveChars(this.chars);
-    if(c.id===this.ch.id){ this.ch=Object.values(this.chars)[0]||newChar(); this.fixup(this.ch); }
+    if(c.id===this.ch.id){ this.ch=this.fixup(newChar()); this.none=true; }
     clearTimeout(this.saveTimer); this.dirty=false;
     this.render();      // (not saved: a fresh empty character is only kept once something is done with it)
   }
@@ -1364,3 +1415,30 @@ document.addEventListener('keydown',e=>{
   const next=rows[i<0 ? 0 : Math.max(0,Math.min(rows.length-1,i+(e.key==='ArrowDown'?1:-1)))];
   if(next && !next.classList.contains('on')){ next.click(); requestAnimationFrame(()=>document.querySelector('#bChoices .shoplist tr.row.on')?.scrollIntoView({block:'nearest'})); }
 });
+
+// Enter goes to the next build step when its Next button is active (not while typing or in a window)
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter' || e.ctrlKey || e.altKey || e.shiftKey || document.querySelector('dialog[open]')) return;
+  const t=e.target; if(t && t.closest && t.closest('input,textarea,select,button,[contenteditable],a')) return;
+  if($('#builder')?.style.display==='none') return;
+  const b=document.querySelector('#bChoices .nextstep'); if(b && !b.disabled){ e.preventDefault(); b.click(); }
+});
+// a click outside an open window (on the darkened page behind it) closes it, like Done or Cancel
+(()=>{
+  let downOut=null;
+  const outside=(d,e)=>{ const r=d.getBoundingClientRect(); return e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom; };
+  document.addEventListener('mousedown',e=>{ const d=e.target; downOut = d && d.tagName==='DIALOG' && d.open && outside(d,e) ? d : null; },true);
+  document.addEventListener('click',e=>{ const d=e.target; if(d && d===downOut && d.tagName==='DIALOG' && d.open && outside(d,e)) d.close(); downOut=null; },true);
+})();
+
+// the official errata notes at the end of a compendium entry ("Update (4/2009)", "Revision (7/30/2009)"...) are
+// already worked into the entry: the builder and the sheet leave them out (the Compendium tab still shows them)
+function stripRevisions(box){
+  const kids=[...box.childNodes]; let on=false;
+  kids.forEach((n,i)=>{
+    if(!on && n.nodeType===3 && /^\s*(Revision|Update|Addition|Deletion)\s*\(\d+\/\d+(\/\d+)?\)/.test(n.nodeValue)){
+      on=true; for(let j=i-1;j>=0 && kids[j].nodeName==='BR';j--) kids[j].remove();
+    }
+    if(on){ if(n.nodeType===1 && n.classList.contains('publishedIn')) on=false; else n.remove(); }
+  });
+}

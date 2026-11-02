@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.75';
+const APP_VERSION = '0.76';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -320,7 +320,7 @@ function start(){
     b.onclick=()=>selectCat(cat); b.dataset.cat=cat; return b;
   }));
   updateCounts();
-  selectCat(views[S.cat] ? S.cat : (lib.power ? 'power' : cats[0]));
+  selectCat(views[S.cat] ? S.cat : ALL);      // a fresh start shows Everything
 }
 
 function showTab(t){

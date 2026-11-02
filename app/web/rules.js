@@ -544,8 +544,7 @@ const itemWeight=it=>{ const {base,magic}=itemParts(it); return +(sp(base||magic
 function wearingReq(r){
   return String(r).split('&').map(x=>{ x=x.trim().replace(/^Wearing/,'');
     let m=/^OffHand(.+)$/.exec(x); if(m) return 'offhand:'+m[1].replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase();
-    if(/^(Rod|Wand|Staff|Orb|Tome|Totem)$/.test(x)) return 'implement:'+x.toLowerCase();
-    return 'never:'+x; });
+    return 'grant:wearing'+x.toLowerCase(); });      // WearingPactBlade, WearingRod: given by the item held
 }
 /* "wearing" conditions on rules: armor:heavy, weapon:light blade, SLOT:off hand, an item's name... */
 function wearContext(ch){
@@ -556,8 +555,9 @@ function wearContext(ch){
   const off=offIt && itemParts(offIt).base, main=mainIt && itemParts(mainIt).base;
   const shield=off && off.type==='Armor' ? off : null;
   const weapons=[main,off].filter(x=>x && x.type==='Weapon');
-  const names=new Set(), filled=new Set();
-  for(const [s,uid] of Object.entries(eq)){ const it=items.find(x=>x.uid===uid); if(!it) continue; filled.add(s); itemEls(it).forEach(e=>names.add(e.name.toLowerCase())); }
+  const names=new Set(), filled=new Set(), grants=new Set();
+  for(const [s,uid] of Object.entries(eq)){ const it=items.find(x=>x.uid===uid); if(!it) continue; filled.add(s); itemEls(it).forEach(e=>{ names.add(e.name.toLowerCase());
+    for(const [t,a] of e.rules||[]) if(t==='grant' && a.type==='Category') grants.add(String(a.name).toLowerCase()); }); }
   if(mainIt && twoHanded(mainIt)) filled.add('off');
   const implKinds=new Set();
   for(const s of ['main','off','symbol1','symbol2']){ const it=at(s); if(!it) continue; const {base,magic}=itemParts(it);
@@ -580,6 +580,7 @@ function wearContext(ch){
       return sp(body,'Armor Category').toLowerCase()===rest || body.name.toLowerCase().startsWith(rest);
     }
     if(kind==='weapon') return weapons.some(w=>rest.split(',').every(c=>wfit(w,c)));
+    if(kind==='grant') return grants.has(rest) || (/^wearing(rod|wand|staff|orb|tome|totem)$/.test(rest) && implKinds.has(rest.slice(7)));
     if(kind==='offhand') return !!(off && off.type==='Weapon' && rest.split(',').every(c=>wfit(off,c)));
     if(kind==='only-weapon') return weapons.length===1 && rest.split(',').every(c=>wfit(weapons[0],c));
     if(kind==='implement') return implKinds.has(rest);

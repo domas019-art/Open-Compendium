@@ -713,7 +713,10 @@ Object.assign(Builder,{
   powerCalc(p){
     if(p.virtual) return p.calc || {rows:[]};
     const st=this.st, L=st.level, s=n=>this.sv(n);
-    const atkText=sp(p,'Attack');
+    // "Primary Attack" / "Secondary Attack" (Dual Strike): the primary line is worked out; main and off hand get their own rows
+    const atkText=sp(p,'Attack')||sp(p,'Primary Attack');
+    const handsText=[sp(p,'Attack'),sp(p,'Primary Attack'),sp(p,' Secondary Attack'),sp(p,'Secondary Attack')].join(' ');
+    const byHand=/main weapon/i.test(handsText) && /off-hand weapon/i.test(handsText);
     if(!atkText && /make a melee basic attack/i.test(sp(p,'Effect')+' '+sp(p,'Hit'))){
       const mba=this.sheetPowers().find(x=>x.id==='ID_INTERNAL_POWER_MELEE_BASIC_ATTACK');
       if(mba && mba!==p) return {...this.powerCalc(mba), note:'This power makes a melee basic attack: these are its numbers.'};
@@ -832,21 +835,33 @@ Object.assign(Builder,{
       }
       return {weapon:w?w.name:'—', magic:magic?.name, atk, def, dmg, dice:diceStr, diceNote, atkParts, dmgParts};
     };
-    const rows=[];
+    const rows=[]; let handsNote='';
     if(beasts) for(const b of beasts) rows.push({...one(null,null,b), weapon:b.name});
     else if(isWeapon){
       const ws=this.sheetWeapons().filter(({base})=>{
         const cat=sp(base,'Weapon Category').toLowerCase(), thrown=/thrown/i.test(sp(base,'Properties'));
         return kind==='ranged' ? (/ranged/.test(cat)||thrown) : kind==='melee' ? /melee/.test(cat) : true; });   // 'both', close, area: any weapon
-      for(const {base,magic} of ws) rows.push({...one(base,magic), weapon:magic?itemName({ids:[base.id,magic.id]}):base.name});
-      if(kind==='melee' || kind==='both') rows.push(one(UNARMED,null));
+      const held=s=>{ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[s]); return it ? itemParts(it) : null; };
+      const same=(h,base,magic)=>h && h.base?.id===base.id && (h.magic?.id||'')===(magic?.id||'');
+      if(byHand){
+        // one attack with the main-hand weapon, one with the off-hand weapon
+        const m=held('main'), o=held('off'), isM=h=>h?.base?.type==='Weapon' && /melee/i.test(sp(h.base,'Weapon Category'));
+        if(isM(m) && isM(o)){
+          rows.push({...one(m.base,m.magic), weapon:'Main hand: '+(m.magic?itemName({ids:[m.base.id,m.magic.id]}):m.base.name)});
+          rows.push({...one(o.base,o.magic), weapon:'Off hand: '+(o.magic?itemName({ids:[o.base.id,o.magic.id]}):o.base.name)});
+        } else if(kind!=='both') handsNote='Needs a melee weapon in each hand (Equipment: main hand and off hand).';
+      }
+      if(!rows.length){
+        for(const {base,magic} of ws) rows.push({...one(base,magic), weapon:magic?itemName({ids:[base.id,magic.id]}):base.name});
+        if(kind==='melee' || kind==='both') rows.push(one(UNARMED,null));
+      }
     } else {
       // implement or no keyword: one line; an implement's enhancement counts for implement powers
       let impl=null;
       if(isImpl) for(const sl of ['main','off','symbol1','symbol2']){ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); const m=it&&itemParts(it).magic; if(m && /\+\d/.test(sp(m,'Enhancement'))){ impl=m; break; } }
       rows.push({...one(null,impl), weapon:impl?impl.name:'—'});
     }
-    return {rows, weaponPower:isWeapon, note: abilities.length>1 && !/highest/i.test(before) ? 'This power lets you choose the ability; the best one is used.' : ''};
+    return {rows, weaponPower:isWeapon, note: handsNote || (abilities.length>1 && !/highest/i.test(before) ? 'This power lets you choose the ability; the best one is used.' : '')};
   },
 
   /* ---------- Skills & Abilities ---------- */
