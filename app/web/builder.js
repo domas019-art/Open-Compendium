@@ -361,6 +361,10 @@ const Builder={
       ch.items.push(it); ch.freebies[id]=it.uid; changed=true;
       ch.equip ||= {}; if(!ch.equip.main){ ch.equip.main=it.uid; }
     }
+    // one put in a hand it can't go in (a pact weapon in the off hand, before that was stopped) is taken out of it
+    for(const uid of Object.values(ch.freebies)) for(const [k,u] of Object.entries(ch.equip||{})){
+      const it=ch.items.find(x=>x.uid===uid);
+      if(u===uid && it && /^(main|off)$/.test(k) && !itemSlots(it).includes(k)){ delete ch.equip[k]; if(!ch.equip.main) ch.equip.main=uid; changed=true; } }
     if(changed) this.dirty=true;
     return changed;
   },

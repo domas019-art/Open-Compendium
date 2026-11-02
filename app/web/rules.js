@@ -480,6 +480,8 @@ function itemSlots(it){
   const {base,magic}=itemParts(it), e=base||magic; if(!e) return [];
   const isShield=x=>x && x.type==='Armor' && /shield/i.test(sp(x,'Armor Type')+' '+sp(x,'Armor Category'));
   if(base && base.type==='Armor') return isShield(base) ? ['off'] : ['body'];
+  // a hexblade's pact weapon is manifested in the main hand, with the implement in the other
+  if(base && base.type==='Weapon' && (magic?.rules||[]).some(([t,a])=>t==='grant' && a.name==='WearingPactBlade')) return ['main'];
   if(base && base.type==='Weapon') return /two/i.test(sp(base,'Hands Required')+sp(base,'Item Slot')) ? ['main'] : ['main','off'];
   const slot=sp(e,'Item Slot').toLowerCase(), mt=sp(magic,'Magic Item Type');
   if(/ki focus/.test(slot) || /^(Holy Symbol|Ki Focus)$/.test(mt) || /holy symbol|ki focus/i.test(e.name) && e.type!=='Magic Item') return ['symbol1','symbol2'];
