@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.77';
+const APP_VERSION = '0.78';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -42,7 +42,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=2;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=3;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -97,8 +97,32 @@ async function readLibrary(list){
       ok++;
     }catch(e){ console.warn('skipped',js[i].p,e); }
   }
+  // corrections from our additions file (a misspelt name, wording an official update changed): applied to both
+  if(RULES.raw && applyCorrections()){ RULES.use(RULES.raw); await saveKey('rules', RULES.raw); }
   if(ok){ S.lowCache={}; S.meta={}; S.terms=null; await save(); }
   await status('');
+}
+/* A correction is an entry of type "Correction" in the additions file: its name is the right text, "Wrong" the text it
+   replaces, and "Only" (optional) the ids it applies to. The wrong spelling stays findable in the compendium's search. */
+function applyCorrections(){
+  const fixes=(RULES.raw||[]).filter(o=>o.type==='Correction' && o.spec?.Wrong);
+  if(!fixes.length) return false;
+  const sw=(t,f)=>typeof t==='string' ? t.split(f.spec.Wrong).join(f.name) : t;
+  for(const f of fixes){
+    const only=f.spec.Only ? new Set(f.spec.Only.split(',').map(x=>x.trim())) : null;
+    for(const o of RULES.raw){
+      if(o===f || (only && !only.has(o.id))) continue;
+      o.name=sw(o.name,f); o.text=sw(o.text,f); o.flavor=sw(o.flavor,f);
+      if(o.spec) for(const k of Object.keys(o.spec)) o.spec[k]=sw(o.spec[k],f);
+    }
+    if(only) continue;           // wording for one builder entry: the compendium already has it right
+    for(const c of Object.values(lib)){
+      for(const r of c.rows) for(let i=0;i<r.length;i++) if(typeof r[i]==='string' && r[i].includes(f.spec.Wrong)){ r[i]=sw(r[i],f); ((c.also ||= {})[r[0]] ||= []).push(f.spec.Wrong); }
+      for(const id of Object.keys(c.data)) if(c.data[id].includes(f.spec.Wrong)) c.data[id]=sw(c.data[id],f);
+      for(const id of Object.keys(c.index)) if(c.index[id].includes(f.spec.Wrong)) c.index[id]=sw(c.index[id],f)+' '+f.spec.Wrong;
+    }
+  }
+  return true;
 }
 function noLibrary(){
   $('#welcome').style.display='';
@@ -151,7 +175,7 @@ function prepare(){
   }
   for(const c of Object.values(lib)){
     // Some cells are lists like ["1+",1,16,6,...]: the first item is shown, the rest are other tiers (still searchable).
-    if(!c.hay){ c.hay={}; for(const r of c.rows) c.hay[r[0]]=r.map(x=>Array.isArray(x)?x.join(' '):x).join(' ').toLowerCase(); }
+    if(!c.hay){ c.hay={}; for(const r of c.rows) c.hay[r[0]]=(r.map(x=>Array.isArray(x)?x.join(' '):x).join(' ')+' '+(c.also?.[r[0]]||[]).join(' ')).toLowerCase(); }
     const li=c.cols.indexOf('Level');
     c.rows=c.rows.map(r=>{ const o=r.map(x=>Array.isArray(x)?String(x[0]):x);
       if(li>=0 && String(o[li]).trim()==='') o[li]='0';       // no level counts as level 0
