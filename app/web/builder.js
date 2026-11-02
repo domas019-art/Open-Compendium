@@ -387,7 +387,7 @@ const Builder={
   /* ---------- Start ---------- */
   startStep(){
     if(this.st) this.summarize();
-    const all=Object.values({...this.chars,[this.ch.id]:this.ch});
+    const all=Object.values(this.none ? {...this.chars} : {...this.chars,[this.ch.id]:this.ch});      // with nothing open, only saved characters
     const view=this.folderView ?? '*';
     const inView=c=>view==='*' || (c.folder||'')===view;
     const cards=el('div',{class:'cards'});
