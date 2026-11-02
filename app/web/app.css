@@ -656,3 +656,5 @@ body.sheetmode #bSheet{display:none}
 .makebox .makerow .grow{flex:1}
 #pop .pknums{margin:8px 0}
 .nextbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:4px 0 16px}
+dialog.askdlg{max-width:440px;border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:var(--panel);color:var(--ink)}
+dialog.askdlg p{margin:0}

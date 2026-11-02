@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.78';
+const APP_VERSION = '0.79';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -331,8 +331,7 @@ function start(){
   $('#welcome').style.display='none';
   $('#tabs').style.display='';
   const hasComp=Object.keys(lib).length>0;
-  let saved=null; try{ saved=localStorage.getItem('open-compendium-tab'); }catch(e){}
-  const want=S.tab || saved || 'builder';
+  const want=S.tab || 'builder';          // the program always opens on the Character Builder
   showTab(!hasComp ? 'builder' : (want==='builder' && !RULES.db ? 'comp' : want));
   if(!hasComp) return;
   const cats=[ALL, ...Object.keys(lib).sort((a,b)=>catLabel(a).localeCompare(catLabel(b)))];
@@ -488,6 +487,24 @@ function renderInto(box, cat, id){
   }
   linkTerms(box, cat+':'+id);
 }
+
+/* Questions and messages in the program's own window (the system's pop-ups can leave the window unresponsive on
+   Windows until it is clicked elsewhere). ask(text) -> Promise<true|false>; tell(text) shows a message. */
+function ask(text,{ok='OK',cancel='Cancel'}={}){
+  return new Promise(res=>{
+    const d=document.createElement('dialog'); d.className='askdlg';
+    const p=document.createElement('p'); p.textContent=text; p.style.whiteSpace='pre-line';
+    const row=document.createElement('div'); row.className='brow'; row.style.justifyContent='flex-end'; row.style.marginTop='12px';
+    let answer=false;
+    const b=(t,v,cls)=>{ const x=document.createElement('button'); x.type='button'; x.className='btn'+(cls?' '+cls:''); x.textContent=t; x.onclick=()=>{ answer=v; d.close(); }; return x; };
+    if(cancel) row.append(b(cancel,false));
+    const okb=b(ok,true,'primary'); row.append(okb);
+    d.append(p,row); document.body.append(d);
+    d.addEventListener('close',()=>{ d.remove(); res(answer); });
+    d.showModal(); okb.focus();
+  });
+}
+function tell(text){ return ask(text,{cancel:null}); }
 
 let popFor=null;
 function closePop(){ $('#pop').hidden=true; popFor=null; }

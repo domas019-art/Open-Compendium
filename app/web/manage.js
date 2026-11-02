@@ -40,11 +40,11 @@ Object.assign(Builder,{
     const row=(label,...kids)=>el('div',{class:'detrow'}, el('label',{text:label}), el('div',{class:'detval'},...kids));
     const name=this.field(ch,'name','Name',{after:()=>{ const h=document.querySelector('#bSheet .shead h2'); if(h) h.textContent=ch.name||'Unnamed'; }});
     const randomName=()=>{
-      if(!race) return alert('Choose a race first: names come from the race.');
+      if(!race) return tell('Choose a race first: names come from the race.');
       const g=(slot('Gender') && RULES.db.els[this.picksOf(slot('Gender'))[0]]?.name)||'';
       const list=s=>(sp(race,s)||'').replace(/\.\s*$/,'').split(/,\s*/).map(x=>x.trim()).filter(Boolean);
       const names=/female/i.test(g) ? list('Female Names') : /male/i.test(g) ? list('Male Names') : [...list('Male Names'),...list('Female Names'),...list('Names')];
-      if(!names.length) return alert('The race has no name list.');
+      if(!names.length) return tell('The race has no name list.');
       ch.name=names[Math.floor(Math.random()*names.length)]; this.changed(); };
     const remember=el('input',{type:'checkbox',checked:(()=>{ try{ return !!localStorage.getItem(PLAYER_KEY); }catch(e){ return false; } })()});
     remember.onchange=()=>{ try{ if(remember.checked) localStorage.setItem(PLAYER_KEY,info.player||''); else localStorage.removeItem(PLAYER_KEY); }catch(e){} };
@@ -72,8 +72,8 @@ Object.assign(Builder,{
     for(const s of st.slots) for(const id of this.picksOf(s)){ const w=this.hbWhy(s,id); if(w) problems.push({text:`House rule: ${RULES.db.els[id]?.name||id} (${w}).`, slot:s, id}); }
     const status=el('div',{class:'bcard'}, el('h3',{text:'Character status'}),
       problems.length ? el('ul',{class:'statuslist'}, ...problems.map(p=>el('li',{text:p.text}))) : el('p',{class:'muted',text:'Everything follows the rules and the campaign books.'}),
-      problems.some(p=>p.slot) ? el('button',{class:'btn small',type:'button',text:'Erase house rules',title:'Remove every house-rule choice and extra slot',onclick:()=>{
-        if(!confirm('Remove all house-rule choices (marked HB) and extra house-rule slots from this character?')) return;
+      problems.some(p=>p.slot) ? el('button',{class:'btn small',type:'button',text:'Erase house rules',title:'Remove every house-rule choice and extra slot',onclick:async()=>{
+        if(!await ask('Remove all house-rule choices (marked HB) and extra house-rule slots from this character?')) return;
         const ch=this.ch;
         for(const p of problems) if(p.slot){ ch.picks[p.slot.key]=(ch.picks[p.slot.key]||[]).filter(x=>x!==p.id); delete ch.hb[p.slot.key+'|'+p.id]; }
         for(const t of Object.keys(ch.extra||{})){ for(const u of ch.extra[t]) delete ch.picks['extra:'+t+':'+u]; ch.extra[t]=[]; }
@@ -161,7 +161,7 @@ Object.assign(Builder,{
         el('button',{class:'btn',type:'button',text:'Add entry',onclick:()=>{ const id='j'+Date.now().toString(36); list.push({id,title:'',date:new Date().toLocaleDateString(),text:''}); this.jsel=id; this.changed(); }}),
         el('button',{class:'btn',type:'button',text:'Add image…',title:'Pick a picture from your computer, or drag one onto the journal',onclick:()=>imgIn.click()}), imgIn,
         el('span',{style:'flex:1'}),
-        el('button',{class:'btn',type:'button',text:'Delete entry',disabled:!cur,onclick:()=>{ if(!confirm('Delete this journal entry?')) return; ch.journal=list.filter(j=>j!==cur); this.changed(); }})));
+        el('button',{class:'btn',type:'button',text:'Delete entry',disabled:!cur,onclick:async()=>{ if(!await ask('Delete this journal entry?')) return; ch.journal=list.filter(j=>j!==cur); this.changed(); }})));
     dropTarget(card, addPic);   // drop a picture anywhere on the journal
     return [card];
   },

@@ -95,7 +95,7 @@ Object.assign(Builder,{
         manif.length>1 ? el('label',{class:'vmanif',title:'Your current elemental manifestation (changing it takes a short rest, or as your power allows)'}, 'Manifestation ',
           el('select',{onchange:e=>set(()=>{ P.manifest=e.target.value; })}, ...manif.map(m=>el('option',{text:m,selected:m===P.manifest})))) : null,
         el('button',{class:'btn',type:'button',title:'Encounter powers and second wind come back; temporary hit points and short effects end',text:'Short rest',onclick:()=>set(()=>this.shortRest())}),
-        el('button',{class:'btn',type:'button',title:'Everything comes back: hit points, surges, all powers, action points',text:'Extended rest',onclick:()=>{ if(confirm('Take an extended rest? Hit points, healing surges and all powers are restored.')) set(()=>this.extendedRest()); }})));
+        el('button',{class:'btn',type:'button',title:'Everything comes back: hit points, surges, all powers, action points',text:'Extended rest',onclick:async()=>{ if(await ask('Take an extended rest? Hit points, healing surges and all powers are restored.')) set(()=>this.extendedRest()); }})));
     const hpBox=el('div',{class:'vhp'+(state?' '+state.toLowerCase():'')},
       el('div',{class:'vhptop'}, el('span',{class:'muted small',text:'Hit points'}), state?el('span',{class:'vstate',text:state}):null),
       el('div',{class:'vhpnum'}, el('b',{text:hp}), el('span',{class:'muted',text:' / '+max}), temp?el('span',{class:'vtemp',text:' +'+temp+' temp'}):null),
@@ -603,9 +603,9 @@ Object.assign(Builder,{
               el('button',{class:'btn small puse',type:'button',text:'Use…',title:'Prepare it, or use one',onclick:()=>this.itemChoice(it,action,()=>{
                 it.qty=(it.qty||1)-1; if(it.qty<=0){ ch.items=(ch.items||[]).filter(x=>x!==it); for(const [s,uid] of Object.entries(ch.equip||{})) if(uid===it.uid) delete ch.equip[s]; } })}),
               inHand ? this.stowButton(it) : null)
-          : el('button',{class:'btn small puse'+(u?' on':''),type:'button',text:u?'Used':'Use',title:daily?`Daily item powers: ${used} of ${dailyMax} used today`:'',onclick:()=>{
+          : el('button',{class:'btn small puse'+(u?' on':''),type:'button',text:u?'Used':'Use',title:daily?`Daily item powers: ${used} of ${dailyMax} used today`:'',onclick:async()=>{
               if(u){ delete P.itemUsed[key]; if(daily) P.dailyItemUses=Math.max(0,used-1); }
-              else { if(daily && used>=dailyMax && !confirm('You have used all your daily item powers for today. Use anyway?')) return; P.itemUsed[key]=1; if(daily) P.dailyItemUses=used+1; this.planActions(iplan.map(x=>x.k),true); this.itemEffect(magic,pw); }
+              else { if(daily && used>=dailyMax && !await ask('You have used all your daily item powers for today. Use anyway?')) return; P.itemUsed[key]=1; if(daily) P.dailyItemUses=used+1; this.planActions(iplan.map(x=>x.k),true); this.itemEffect(magic,pw); }
               this.changed(); }}));
       if(!u && !inHand && !iplan.every(x=>x.from)) row.classList.add('noact');
       row.querySelectorAll('.puse').forEach(b=>this.litActions(b,iplan));
@@ -938,7 +938,7 @@ Object.assign(Builder,{
       b.onclick=()=>{ d.hidden=!d.hidden; if(!d.hidden && !d.firstChild){ const c=el('div',{class:'pcard entry'}); this.renderElement(c,e.id); d.append(c); } };
       const act=(/(Standard|Minor|Move|Free|Immediate (?:Interrupt|Reaction)|No) Action/i.exec(pw.map(([,v])=>v).join(' '))||[])[0]||'';
       const ctl=consumable ? el('button',{class:'btn small',type:'button',text:'Use…',title:'Prepare it, or use one',onclick:()=>this.itemChoice(it,act,()=>{ it.qty=(it.qty||1)-1; if(it.qty<=0){ ch.items=(ch.items||[]).filter(x=>x!==it); for(const [s,uid] of Object.entries(eq)) if(uid===it.uid) delete eq[s]; } })})
-        : (isDaily||isEnc) ? el('button',{class:'btn small puse'+(u?' on':''),type:'button',text:u?'Power used':(isDaily?'Use daily power':'Use power'),onclick:()=>{ if(u){ delete P.itemUsed[key]; if(isDaily) P.dailyItemUses=Math.max(0,used-1); } else { if(isDaily && used>=dailyMax && !confirm('You have used all your daily item powers for today. Use anyway?')) return; P.itemUsed[key]=1; if(isDaily) P.dailyItemUses=used+1; } this.changed(); }}) : el('span',{});
+        : (isDaily||isEnc) ? el('button',{class:'btn small puse'+(u?' on':''),type:'button',text:u?'Power used':(isDaily?'Use daily power':'Use power'),onclick:async()=>{ if(u){ delete P.itemUsed[key]; if(isDaily) P.dailyItemUses=Math.max(0,used-1); } else { if(isDaily && used>=dailyMax && !await ask('You have used all your daily item powers for today. Use anyway?')) return; P.itemUsed[key]=1; if(isDaily) P.dailyItemUses=used+1; } this.changed(); }}) : el('span',{});
       const inHand=consumable && !!P.ready?.[it.uid];
       return [el('div',{class:'prow2'+(u?' used':'')+(inHand?' inhand':'')}, b, inHand ? el('div',{class:'pbtns'}, ctl, this.stowButton(it)) : ctl), d];
     };

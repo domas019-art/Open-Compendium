@@ -56,20 +56,20 @@ const Folders={
   clean(n){ return String(n||'').replace(/[\\/:*?"<>|]+/g,'_').replace(/[. ]+$/,'').trim().slice(0,60); },
   async make(n){
     n=this.clean(n); if(!n) return null;
-    if(/^deleted$/i.test(n)){ alert('“Deleted” is where deleted characters go; please choose another name.'); return null; }
+    if(/^deleted$/i.test(n)){ tell('“Deleted” is where deleted characters go; please choose another name.'); return null; }
     if(this.has(n)) return this.find(n);
-    try{ n=await OC.folderOp('make',n); }catch(e){ alert('Could not make that folder: '+e.message); return null; }
+    try{ n=await OC.folderOp('make',n); }catch(e){ tell('Could not make that folder: '+e.message); return null; }
     this.list.push(n); this.sort(); this.saveOrder(); return n;
   },
   async rename(a,b){
     b=this.clean(b); if(!b || b===a) return a;
-    if(/^deleted$/i.test(b)){ alert('“Deleted” is where deleted characters go; please choose another name.'); return a; }
-    if(this.has(b) && b.toLowerCase()!==a.toLowerCase()){ alert('A folder with that name already exists.'); return a; }
-    try{ b=await OC.folderOp('rename',a,b); }catch(e){ alert('Could not rename the folder: '+e.message.replace(/^.*Error: /,'')); return a; }
+    if(/^deleted$/i.test(b)){ tell('“Deleted” is where deleted characters go; please choose another name.'); return a; }
+    if(this.has(b) && b.toLowerCase()!==a.toLowerCase()){ tell('A folder with that name already exists.'); return a; }
+    try{ b=await OC.folderOp('rename',a,b); }catch(e){ tell('Could not rename the folder: '+e.message.replace(/^.*Error: /,'')); return a; }
     this.list=this.list.map(x=>x===a?b:x); this.saveOrder(); this.sort(); return b;
   },
   async remove(n){
-    try{ await OC.folderOp('remove',n); }catch(e){ alert('Only an empty folder can be removed. (Files you put there yourself count too.)'); return false; }
+    try{ await OC.folderOp('remove',n); }catch(e){ tell('Only an empty folder can be removed. (Files you put there yourself count too.)'); return false; }
     this.list=this.list.filter(x=>x!==n); this.saveOrder(); return true;
   },
 };
@@ -231,7 +231,7 @@ const Builder={
       if(o.type!=='campaign') throw new Error();
       this.setCampaign({name:o.name, books:Array.isArray(o.books)?o.books:null});
       if($('#campDlg').open) this.openCampaign();
-    }catch(e){ alert('That file is not an Open Compendium campaign file.'); }
+    }catch(e){ tell('That file is not an Open Compendium campaign file.'); }
   },
   options(slot){
     const showAll=!!this.ch.showAll[this.stepOf(slot)], picks=this.picksOf(slot);
@@ -1024,7 +1024,7 @@ const Builder={
     const text=await file.text();
     if(/^\s*(\ufeff)?\s*</.test(text)){                       // a save file from the original Character Builder
       try{ const c=importDnd4e(text); c.importInfo.file=file.name; c.folder=this.newFolder(); this.openChar(c); this.changed(); }
-      catch(e){ alert('Could not import that file: '+e.message); }
+      catch(e){ tell('Could not import that file: '+e.message); }
       return;
     }
     try{
@@ -1033,12 +1033,13 @@ const Builder={
       c.id='c'+Date.now().toString(36);
       c.folder=this.newFolder(); delete c.killed; delete c.folderBeforeKilled;
       this.openChar(c); this.changed();
-    }catch(e){ alert('That file is not an Open Compendium character.'); }
+    }catch(e){ tell('That file is not an Open Compendium character.'); }
   },
   async remove(c){
     // nothing chosen yet (a character made by accident): removed completely, no copy kept in Deleted
-    const blank=!Object.values(c.picks||{}).some(a=>Array.isArray(a) && a.length);
-    if(!confirm(blank ? `Delete “${c.name}”? Nothing has been chosen for it yet, so it is removed completely.` : `Delete “${c.name}”? Its file is moved to Characters\\Deleted.`)) return;
+    // (choices the program fills in by itself, like a language, don't count: no class and no race means nothing was done)
+    const blank=!Object.values(c.picks||{}).flat().some(id=>/^(Class|Race|Hybrid Class)$/.test(RULES.db?.els[id]?.type||''));
+    if(!await ask(blank ? `Delete “${c.name}”? Nothing has been chosen for it yet, so it is removed completely.` : `Delete “${c.name}”? Its file is moved to Characters\\Deleted.`)) return;
     if(blank) await OC.purgeChar(c.id);
     delete this.chars[c.id]; await saveChars(this.chars);
     if(c.id===this.ch.id){ this.ch=this.fixup(newChar()); this.none=true; }
@@ -1335,7 +1336,7 @@ $('#charIn').onchange=e=>{ const f=e.target.files[0]; if(f) Builder.importFile(f
   root.addEventListener('dragover',e=>{ if(root.classList.contains('dropchars') && isFiles(e)) e.preventDefault(); });
   root.addEventListener('drop',async e=>{ if(!root.classList.contains('dropchars') || !isFiles(e)) return; e.preventDefault(); depth=0; root.classList.remove('dropping');
     const n=await Builder.importFiles(e.dataTransfer.files);
-    if(!n) alert('Drop a character file: .dnd4e from the original Character Builder, or .json saved by this app.'); });
+    if(!n) tell('Drop a character file: .dnd4e from the original Character Builder, or .json saved by this app.'); });
 })();
 $('#pkSearch').oninput=e=>{ Builder.picker.q=e.target.value.toLowerCase().trim(); Builder.renderPicker(); };
 $('#pkClose').onclick=()=>$('#picker').close();

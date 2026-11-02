@@ -151,9 +151,9 @@ Object.assign(Builder,{
       dlg.replaceChildren(el('h3',{text:'Total money'}), grid,
         el('p',{class:'muted small',text:'1 astral diamond = 100 pp = 10,000 gp. 1 gp = 10 sp = 100 cp.'}),
         el('div',{class:'brow wrap',style:'justify-content:center'}, conv,
-          el('button',{class:'btn',type:'button',title:'Set the money to the amount for the character\'s level (banked money is cleared)',text:'Level-Appropriate',onclick:()=>{
+          el('button',{class:'btn',type:'button',title:'Set the money to the amount for the character\'s level (banked money is cleared)',text:'Level-Appropriate',onclick:async()=>{
             const amt=startingMoney(this.st.level);
-            if(!confirm(`Set the money to ${fmtMoney(amt)}, the amount for level ${this.st.level}?\n\nThis replaces all the character's money now (${fmtMoney((ch.money||0)+(ch.stored||0))}, carried and banked). Items are kept.`)) return;
+            if(!await ask(`Set the money to ${fmtMoney(amt)}, the amount for level ${this.st.level}?\n\nThis replaces all the character's money now (${fmtMoney((ch.money||0)+(ch.stored||0))}, carried and banked). Items are kept.`)) return;
             c.carried=breakdown(amt); c.banked=breakdown(0); ch.money=amt; ch.stored=0; this.changed(); draw(); }})),
         el('div',{class:'brow',style:'justify-content:flex-end;margin-top:10px'}, el('button',{class:'btn primary',type:'button',text:'Close',onclick:()=>dlg.close()})));
     };
@@ -392,11 +392,11 @@ Object.assign(Builder,{
 
   /* Auto Buy / Auto Add, like the original: a magic weapon or implement (level +1), magic armor (character's level)
      and a magic amulet (level -1), picked at random among the ones that suit the character */
-  autoItems(pay){
+  async autoItems(pay){
     const ch=this.ch, L=this.st.level;
     const msg=pay ? 'This will try to buy a magic weapon or implement, magic armor and a magic amulet of a suitable level for the character. Items the character can\'t afford are skipped.\n\nGo ahead?'
       : 'This will add a level-appropriate magic weapon or implement, magic armor and magic amulet to the character, and set the money to the amount for this level. Items the character already has are kept.\n\nGo ahead?';
-    if(!confirm(msg)) return;
+    if(!await ask(msg)) return;
     const pick=a=>a[Math.floor(Math.random()*a.length)];
     const ok=e=>this.bookOk(e) && itemCost(e)>0 && !/cursed/i.test(e.name) && !/^Rare|Unique/.test(sp(e,'Rarity'));
     const mags=t=>(RULES.db.byType['Magic Item']||[]).map(id=>RULES.db.els[id]).filter(e=>ok(e) && sp(e,'Magic Item Type')===t);
