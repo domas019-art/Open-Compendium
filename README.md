@@ -2,7 +2,7 @@
 
 An offline compendium, character builder and character sheet for the 4th edition D&D, as a portable Windows program.
 
-**It contains no game content.** It reads your own library files (the compendium files and the Character Builder's
+**It contains no game content.** It reads your own library files (the web compendium files and the Character Builder's
 `combined.dnd40.merged.xml` made by CBLoader) from the `Libraries` folder next to the programs.
 
 ## Folders
