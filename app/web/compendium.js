@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.80';
+const APP_VERSION = '0.81';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -331,8 +331,12 @@ function start(){
   $('#welcome').style.display='none';
   $('#tabs').style.display='';
   const hasComp=Object.keys(lib).length>0;
+  const hasRules=!!RULES.db, both=!hasComp && !hasRules;
+  // a tab with no library behind it is hidden (unless neither library is there: then both show their notices)
+  $('#tabs [data-tab="comp"]').hidden = !hasComp && !both;
+  $('#tabs [data-tab="builder"]').hidden = !hasRules && !both;
   const want=S.tab || 'builder';          // the program always opens on the Character Builder
-  showTab(!hasComp ? 'builder' : (want==='builder' && !RULES.db ? 'comp' : want));
+  showTab(!hasComp ? 'builder' : (want==='builder' && !hasRules ? 'comp' : want));
   if(!hasComp) return;
   const cats=[ALL, ...Object.keys(lib).sort((a,b)=>catLabel(a).localeCompare(catLabel(b)))];
   $('#cats').replaceChildren(...cats.map(cat=>{
