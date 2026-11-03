@@ -753,9 +753,13 @@ Object.assign(Builder,{
     const wCount=terms.reduce((n,t)=>n+(+((/^(\d+)\[W\]/.exec(t)||[])[1]||0)),0);
     const bCount=terms.reduce((n,t)=>n+(+((/^(\d+)\[B\]/.exec(t)||[])[1]||0)),0);
     const dice=terms.map(t=>(/^(\d+d\d+)/.exec(t)||[])[1]).find(Boolean)||'';
-    const flatTerms=terms.filter(t=>/^\d+$/.test(t)).map(Number);
+    const flatTerms=terms.filter(t=>/^\d+$/.test(t)).map(Number).filter(n=>n>0);
     const beastMods=terms.filter(t=>/^beast'?s /i.test(t) && /modifier/i.test(t));
-    const dmgAbils=terms.filter(t=>!/^beast'?s /i.test(t) && /modifier/i.test(t)).map(t=>ABILITIES.filter(a=>new RegExp('\\b'+a+'\\b','i').test(t))).filter(x=>x.length);
+    // "Strength modifier", "Strength modifier or Wisdom modifier", "highest ability modifier", and the older
+    // "Strength, Constitution, Dexterity, Intelligence, Wisdom, or Charisma" (no "modifier"): the best one counts
+    const namesIn=t=>ABILITIES.filter(a=>new RegExp('\\b'+a+'\\b','i').test(t));
+    const dmgAbils=terms.filter(t=>!/^beast'?s /i.test(t) && (/modifier/i.test(t) || namesIn(t).length>1))
+      .map(t=>/highest ability/i.test(t) ? ABILITIES.slice() : namesIn(t)).filter(x=>x.length);
     const halfLevelDmg=terms.some(t=>/one-half your level/i.test(t));
     const hasDamage=!!(wCount||bCount||dice||dmgAbils.length||beastMods.length);
     // bonuses from feats, features and items that apply to this attack (keys like "weapon,heavy blade group:attack")
