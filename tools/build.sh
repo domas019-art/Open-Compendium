@@ -18,7 +18,7 @@ find locales -type f ! -name en-US.pak ! -name lt.pak -delete
 mv electron.exe "Open Compendium.exe"
 ${BRAND_RUNNER:-node} "$ROOT/tools/brand.mjs" "Open Compendium.exe" "$ROOT/tools/icon.ico" "$VER"
 mkdir -p resources/app && cp -r "$ROOT/app/." resources/app/ && cp "$ROOT/tools/icon.ico" resources/app/
-cp "$ROOT/dist-files/README.txt" .
+sed "s/VERSION/${VER%.0}/" "$ROOT/dist-files/README.txt" > README.txt
 mkdir -p Characters/Deleted Characters/Killed Data "Libraries/Compendium" "Libraries/Character Builder" portraits
 cp "$ROOT/dist-files/README - portraits.txt" portraits/
 cd ..

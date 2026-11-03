@@ -31,8 +31,17 @@ the build and most of the documentation are AI-written. Bug reports and suggesti
 ## Download
 
 Get the latest version from [Releases](https://github.com/domas019-art/Open-Compendium/releases): the full zip for a new
-install, or the update zip to unzip over an existing copy. Windows releases are code-signed through the
-SignPath Foundation (free code signing for open-source projects) once the project is accepted.
+install, or the update zip to unzip over an existing copy.
+
+- **New install:** download `Open-Compendium-<version>.zip`, unzip it anywhere and run `Open Compendium.exe`. This zip is
+  the complete program; it does not need the update zip.
+- **Updating:** download `Open-Compendium-<version>-update.zip` and unzip it over your existing program folder (it holds
+  only the program's own files, so your characters, library and settings stay).
+- **You need your own library files.** The program contains no game content. Put the D&D Compendium files in
+  `Libraries\Compendium` and the Character Builder files (`combined.dnd40.merged.xml` and any `.part` files) in
+  `Libraries\Character Builder`. Without them it opens with a "No library found" notice. Either library on its own works.
+- The program is not code-signed, so Windows may show "Windows protected your PC" the first time. Click
+  **More info**, then **Run anyway**.
 
 ## Reporting a bug
 
@@ -50,14 +59,9 @@ Please don't attach anything from the Libraries folder: it is game content and c
 The program is built by GitHub from this repository (Actions → Build): `tools/build.sh` downloads Electron 44.9.3,
 checks it against Electron's published checksums, brands the exe and adds `app/`. Every release zip comes from that build.
 
-## Code signing policy
+## Privacy
 
-Releases will be signed once the project is accepted by SignPath Foundation (free code signing for open source).
-
-- Committers and reviewers: [domas019-art](https://github.com/domas019-art)
-- Approvers: [domas019-art](https://github.com/domas019-art)
-
-Privacy: this program does not transfer any information to other networked systems. It makes no internet connections at all;
+This program does not transfer any information to other networked systems. It makes no internet connections at all;
 every web address is refused.
 
 ## Legal
