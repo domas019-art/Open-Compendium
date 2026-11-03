@@ -22,6 +22,12 @@ See [tools/BUILD.md](tools/BUILD.md). A full release is the Electron engine with
 
 The version is in `app/package.json` and `APP_VERSION` in `app/web/compendium.js` (shown at the foot of the Start page).
 
+## Download
+
+Get the latest version from [Releases](https://github.com/domas019-art/Open-Compendium/releases): the full zip for a new
+install, or the update zip to unzip over an existing copy. Windows releases are code-signed through the
+SignPath Foundation (free code signing for open-source projects) once the project is accepted.
+
 ## Building
 
 The program is built by GitHub from this repository (Actions → Build): `tools/build.sh` downloads Electron 44.9.3,
