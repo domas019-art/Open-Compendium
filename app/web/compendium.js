@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.85';
+const APP_VERSION = '0.86';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -42,7 +42,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=4;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=5;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -106,17 +106,31 @@ async function readLibrary(list){
    replaces, and "Only" (optional) the ids it applies to. The wrong spelling stays findable in the compendium's search. */
 function applyCorrections(){
   const fixes=(RULES.raw||[]).filter(o=>o.type==='Correction' && o.spec?.Wrong);
-  if(!fixes.length) return false;
+  const aliases=(RULES.raw||[]).filter(o=>o.type==='Alias' && o.spec?.Only);
+  if(!fixes.length && !aliases.length) return false;
+  // ID_FMP_POWER_7572 in the builder is power7572 in the compendium; other ids are used as they are
+  const compIds=list=>new Set(list.map(x=>{ const m=/^ID_FMP_([A-Z_]+?)_(\d+)$/.exec(x); return m ? m[1].replace(/_/g,'').toLowerCase()+m[2] : x; }));
+  /* An "Alias" is another name an entry is known by (the book's name, when the library kept a later one): the
+     entry is found by either name, in the compendium's search and the builder's lists. Nothing is renamed. */
+  for(const a of aliases){
+    const only=new Set(a.spec.Only.split(',').map(x=>x.trim())), cids=compIds([...only]);
+    for(const o of RULES.raw) if(o!==a && only.has(o.id)) (o.also ||= []).push(a.name);
+    for(const c of Object.values(lib)){
+      for(const r of c.rows) if(cids.has(r[0])) ((c.also ||= {})[r[0]] ||= []).push(a.name);
+      for(const id of Object.keys(c.index)) if(cids.has(id)) c.index[id]+=' '+a.name;
+    }
+  }
   const sw=(t,f)=>typeof t==='string' ? t.split(f.spec.Wrong).join(f.name) : t;
   for(const f of fixes){
     const only=f.spec.Only ? new Set(f.spec.Only.split(',').map(x=>x.trim())) : null;
     for(const o of RULES.raw){
       if(o===f || (only && !only.has(o.id))) continue;
-      o.name=sw(o.name,f); o.text=sw(o.text,f); o.flavor=sw(o.flavor,f);
+      const was=o.name; o.name=sw(o.name,f); if(o.name!==was) (o.also ||= []).push(was);   // the old spelling still finds it
+      o.text=sw(o.text,f); o.flavor=sw(o.flavor,f);
       if(o.spec) for(const k of Object.keys(o.spec)) o.spec[k]=sw(o.spec[k],f);
     }
     // in the compendium the same entries: ID_FMP_POWER_7572 is power7572 there
-    const cids=only ? new Set([...only].map(x=>{ const m=/^ID_FMP_([A-Z_]+?)_(\d+)$/.exec(x); return m ? m[1].replace(/_/g,'').toLowerCase()+m[2] : x; })) : null;
+    const cids=only ? compIds([...only]) : null;
     const mine=id=>!cids || cids.has(id);
     for(const c of Object.values(lib)){
       for(const r of c.rows) if(mine(r[0])) for(let i=0;i<r.length;i++) if(typeof r[i]==='string' && r[i].includes(f.spec.Wrong)){ r[i]=sw(r[i],f); ((c.also ||= {})[r[0]] ||= []).push(f.spec.Wrong); }

@@ -846,7 +846,7 @@ const Builder={
   },
   renderPicker(){
     const P=this.picker, {slot,q}=P, picks=this.picksOf(slot);
-    const opts=this.options(slot).filter(o=>!q || (o.el.name+' '+metaLine(o.el)).toLowerCase().includes(q));
+    const opts=this.options(slot).filter(o=>!q || (o.el.name+' '+(o.el.also||[]).join(' ')+' '+metaLine(o.el)).toLowerCase().includes(q));
     $('#pkCount').textContent=`${picks.length} of ${slot.number} chosen · ${opts.length} option${opts.length===1?'':'s'}`;
     const list=$('#pkList'); list.replaceChildren();
     // group long lists the way the original builder does
