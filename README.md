@@ -22,6 +22,12 @@ See [tools/BUILD.md](tools/BUILD.md). A full release is the Electron engine with
 
 The version is in `app/package.json` and `APP_VERSION` in `app/web/compendium.js` (shown at the foot of the Start page).
 
+## Made with AI
+
+This program was written by Claude, an AI assistant made by Anthropic, working with the project's owner, who
+designed it, tested every version and decided what goes in. The owner is a player, not a programmer: the code,
+the build and most of the documentation are AI-written. Bug reports and suggestions are welcome all the same.
+
 ## Download
 
 Get the latest version from [Releases](https://github.com/domas019-art/Open-Compendium/releases): the full zip for a new
