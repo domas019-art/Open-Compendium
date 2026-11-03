@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.81';
+const APP_VERSION = '0.82';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';

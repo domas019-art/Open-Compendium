@@ -42,6 +42,7 @@ try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendiu
   <section id="detail">
     <button class="btn" id="back" type="button">← Back</button>
     <div id="entry" class="entry"></div>
+    <div class="appver" id="compVer"></div>
   </section>
 </main>
 <section id="compEmpty" hidden>The compendium files aren't loaded. Use “Add / replace data…” and choose the folder with your compendium files.</section>
@@ -90,6 +91,6 @@ try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendiu
 <script src="charsheet.js"></script>
 <script src="importer.js"></script>
 <script src="units.js"></script>
-<script>document.getElementById('appTitle').title='Version '+APP_VERSION;</script>
+<script>document.getElementById('appTitle').title='Version '+APP_VERSION; document.getElementById('compVer').textContent='Open Compendium '+APP_VERSION;</script>
 </body>
 </html>

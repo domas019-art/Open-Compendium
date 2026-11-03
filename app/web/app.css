@@ -44,11 +44,13 @@ td{padding:6px 12px;border-bottom:1px solid var(--line)}
 tr.row{cursor:pointer}
 tr.row:hover{background:var(--hover)}
 tr.row.on{background:var(--sel)}
-#detail{overflow:auto;padding:20px 24px;min-height:0;min-width:0}
+#detail{overflow:auto;padding:20px 24px;min-height:0;min-width:0;display:flex;flex-direction:column}
+#detail>#entry{flex:1 0 auto}
+#compVer{margin-top:auto;padding-top:18px}
 #entry{max-width:780px;margin:0 auto}
 .empty{color:var(--muted);margin:22vh auto 0;max-width:340px;text-align:center}
 .empty b{display:block;color:var(--ink);font-size:17px;margin-bottom:6px}
-#back{display:none;margin-bottom:10px}
+#back{display:none;margin-bottom:10px;align-self:flex-start}
 .notice{background:var(--stat);padding:8px 12px;border-radius:6px;font-size:13px;color:var(--muted);margin-bottom:12px}
 
 /* entry rendering (colours follow the original viewer) */
