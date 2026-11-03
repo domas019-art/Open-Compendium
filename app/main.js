@@ -36,7 +36,7 @@ app.commandLine.appendSwitch('disable-features',
 
 // one copy at a time (two would write the same character files)
 if (!app.requestSingleInstanceLock()) { app.quit(); }
-app.on('second-instance', () => { const w = BrowserWindow.getAllWindows()[0]; if (w) { if (w.isMinimized()) w.restore(); w.focus(); } });
+app.on('second-instance', () => { const w = BrowserWindow.getAllWindows()[0]; if (w) { if (w.isMinimized()) w.restore(); if (!w.isVisible()) w.show(); w.focus(); } });
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'oc', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, codeCache: true } }]);
 
@@ -250,6 +250,8 @@ function createWindow() {
   });
   if (s.max) win.maximize();
   win.once('ready-to-show', () => { if (s.zoom) win.webContents.setZoomFactor(s.zoom); win.show(); });
+  // a slow first start (Windows checking the program file) must not leave a hidden window: show it anyway after a moment
+  setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 2500);
   // before closing, the app saves anything not yet saved (at most a few seconds)
   let closing = false;
   win.on('close', e => {
