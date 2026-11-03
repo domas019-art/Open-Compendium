@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open Compendium</title>
+<link rel="stylesheet" href="app.css">
+<script>/* light or dark: the saved choice, otherwise the computer's setting */
+try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendium-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); }catch(e){ document.documentElement.dataset.theme='light'; }</script>
+</head>
+<body>
+<header>
+  <h1 id="appTitle">Open Compendium</h1>
+  <nav id="tabs" style="display:none">
+    <button type="button" data-tab="builder" class="on">Character Builder</button>
+    <button type="button" data-tab="comp">Compendium</button>
+  </nav>
+  <span style="flex:1"></span>
+  <button class="btn" id="booksBtn" type="button" style="display:none">Books</button>
+  <button class="btn" id="unitsBtn" type="button"></button>
+  <button class="btn" id="themeBtn" type="button" title="Switch between light and dark"></button>
+</header>
+
+<section id="welcome" style="display:none">
+  <h2></h2>
+  <p></p>
+  <div class="row"></div>
+  <div id="status"></div>
+</section>
+
+<main id="app">
+  <nav id="cats"></nav>
+  <section id="mid">
+    <div id="controls">
+      <input type="search" id="q" placeholder="Search…">
+      <label title="Also look inside the full text of every entry, not just the columns shown in the list"><input type="checkbox" id="full"> search inside entries too</label>
+      <span id="filters" style="display:contents"></span>
+    </div>
+    <div id="count"></div>
+    <div id="listwrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  </section>
+  <section id="detail">
+    <button class="btn" id="back" type="button">← Back</button>
+    <div id="entry" class="entry"></div>
+  </section>
+</main>
+<section id="compEmpty" hidden>The compendium files aren't loaded. Use “Add / replace data…” and choose the folder with your compendium files.</section>
+
+<main id="builder" style="display:none">
+  <section id="bChoices"></section>
+  <section id="bSheet"></section>
+</main>
+
+<dialog id="picker">
+  <div class="pkhead">
+    <h3 id="pkTitle"></h3>
+    <input type="search" id="pkSearch" placeholder="Search…">
+    <label class="chk"><input type="checkbox" id="pkAll"> Show everything available</label>
+    <span id="pkCount" class="muted"></span>
+    <button class="btn" id="pkClose" type="button">Done</button>
+  </div>
+  <div class="pkbody">
+    <div id="pkList" tabindex="0" aria-label="Options (use arrow keys)"></div>
+    <div id="pkPreview"></div>
+  </div>
+</dialog>
+
+<dialog id="campDlg">
+  <div class="pkhead">
+    <h3>Campaign books</h3>
+    <input type="text" id="campName" placeholder="Campaign name" aria-label="Campaign name">
+    <span id="campCount" class="muted small"></span>
+    <button class="btn" id="campSave" type="button">Save campaign file</button>
+    <button class="btn" id="campLoad" type="button">Load campaign file…</button>
+    <button class="btn primary" id="campDone" type="button">Done</button>
+  </div>
+  <div id="campBody" class="bookchooser"></div>
+</dialog>
+<input type="file" id="campIn" accept=".json" hidden>
+<div id="bookPanel" hidden></div>
+<div id="pop" class="entry" hidden></div>
+<input type="file" id="charIn" accept=".json,.dnd4e,.xml,.txt" hidden>
+
+<script src="compendium.js"></script>
+<script src="rules.js"></script>
+<script src="builder.js"></script>
+<script src="shop.js"></script>
+<script src="portraits.js"></script>
+<script src="manage.js"></script>
+<script src="charsheet.js"></script>
+<script src="importer.js"></script>
+<script src="units.js"></script>
+<script>document.getElementById('appTitle').title='Version '+APP_VERSION;</script>
+</body>
+</html>

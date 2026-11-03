@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8e2430"/><stop offset="1" stop-color="#4f0f18"/></linearGradient>
+    <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbf1dc"/><stop offset="1" stop-color="#e6d2a8"/></linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#d9a441" stroke-width="6" opacity=".85"/>
+  <!-- open book -->
+  <path d="M128 92 C104 76 72 72 40 78 L40 196 C72 190 104 194 128 210 Z" fill="url(#pg)" stroke="#3a0a10" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M128 92 C152 76 184 72 216 78 L216 196 C184 190 152 194 128 210 Z" fill="url(#pg)" stroke="#3a0a10" stroke-width="5" stroke-linejoin="round"/>
+  <g stroke="#b9a27a" stroke-width="4" stroke-linecap="round">
+    <path d="M58 110 C78 107 96 109 112 116"/><path d="M58 132 C78 129 96 131 112 138"/><path d="M58 154 C78 151 96 153 112 160"/>
+    <path d="M144 116 C160 109 178 107 198 110"/><path d="M144 138 C160 131 178 129 198 132"/><path d="M144 160 C160 153 178 151 198 154"/>
+  </g>
+  <!-- gem/die above the spine -->
+  <g transform="translate(128 64)">
+    <polygon points="0,-40 35,-20 35,20 0,40 -35,20 -35,-20" fill="#e2ad48" stroke="#3a0a10" stroke-width="5" stroke-linejoin="round"/>
+    <polygon points="0,-22 20,13 -20,13" fill="#f6d37e" stroke="#3a0a10" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M0,-40 L0,-22 M35,-20 L20,13 M35,20 L20,13 M0,40 L20,13 M0,40 L-20,13 M-35,20 L-20,13 M-35,-20 L-20,13 M-35,-20 L0,-22 M35,-20 L0,-22" stroke="#3a0a10" stroke-width="3" fill="none"/>
+  </g>
+</svg>
