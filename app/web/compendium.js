@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.82';
+const APP_VERSION = '0.83';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -42,7 +42,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=3;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=4;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -115,11 +115,13 @@ function applyCorrections(){
       o.name=sw(o.name,f); o.text=sw(o.text,f); o.flavor=sw(o.flavor,f);
       if(o.spec) for(const k of Object.keys(o.spec)) o.spec[k]=sw(o.spec[k],f);
     }
-    if(only) continue;           // wording for one builder entry: the compendium already has it right
+    // in the compendium the same entries: ID_FMP_POWER_7572 is power7572 there
+    const cids=only ? new Set([...only].map(x=>{ const m=/^ID_FMP_([A-Z_]+?)_(\d+)$/.exec(x); return m ? m[1].replace(/_/g,'').toLowerCase()+m[2] : x; })) : null;
+    const mine=id=>!cids || cids.has(id);
     for(const c of Object.values(lib)){
-      for(const r of c.rows) for(let i=0;i<r.length;i++) if(typeof r[i]==='string' && r[i].includes(f.spec.Wrong)){ r[i]=sw(r[i],f); ((c.also ||= {})[r[0]] ||= []).push(f.spec.Wrong); }
-      for(const id of Object.keys(c.data)) if(c.data[id].includes(f.spec.Wrong)) c.data[id]=sw(c.data[id],f);
-      for(const id of Object.keys(c.index)) if(c.index[id].includes(f.spec.Wrong)) c.index[id]=sw(c.index[id],f)+' '+f.spec.Wrong;
+      for(const r of c.rows) if(mine(r[0])) for(let i=0;i<r.length;i++) if(typeof r[i]==='string' && r[i].includes(f.spec.Wrong)){ r[i]=sw(r[i],f); ((c.also ||= {})[r[0]] ||= []).push(f.spec.Wrong); }
+      for(const id of Object.keys(c.data)) if(mine(id) && c.data[id].includes(f.spec.Wrong)) c.data[id]=sw(c.data[id],f);
+      for(const id of Object.keys(c.index)) if(mine(id) && c.index[id].includes(f.spec.Wrong)) c.index[id]=sw(c.index[id],f)+' '+f.spec.Wrong;
     }
   }
   return true;
