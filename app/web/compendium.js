@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.86';
+const APP_VERSION = '0.87';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -83,7 +83,7 @@ async function readLibrary(list){
   if(RULES.raw) await saveKey('rules', RULES.raw);
   // the compendium
   const js=list.filter(f=>/\.js$/i.test(f.p));
-  let ok=0;
+  let ok=0; const extraRows={};
   for(let i=0;i<js.length;i++){
     if(i%8===0) await status(`Reading the compendium… ${i+1} of ${js.length}`);
     const t=await text(js[i]);
@@ -91,11 +91,21 @@ async function readLibrary(list){
     try{
       const {kind,cat,payload}=parseJsonp(t);
       const c = lib[cat] ||= {cols:null, rows:[], index:{}, data:{}};
-      if(kind==='listing'){ c.cols=payload[0]; c.rows=payload[1]; c.hay=null; }
+      // our own additions (a file with "open-compendium" in its name) add rows instead of replacing the listing
+      if(kind==='listing' && /open-compendium/i.test(js[i].p)) (extraRows[cat] ||= []).push({cols:payload[0], rows:payload[1]});
+      else if(kind==='listing'){ c.cols=payload[0]; c.rows=payload[1]; c.hay=null; }
       else if(kind==='index') Object.assign(c.index,payload);
       else Object.assign(c.data,payload);
       ok++;
     }catch(e){ console.warn('skipped',js[i].p,e); }
+  }
+  // added entries: their columns are matched to the category's own by name
+  for(const [cat,adds] of Object.entries(extraRows)){
+    const c=lib[cat]; if(!c) continue;
+    for(const a of adds){ const cols=c.cols||a.cols; if(!c.cols) c.cols=cols;
+      const ids=new Set(c.rows.map(r=>r[0]));
+      for(const r of a.rows){ if(ids.has(r[0])) continue; const o=cols.map(k=>{ const j=a.cols.indexOf(k); return j<0 ? '' : r[j]; }); c.rows.push(o); }
+      c.hay=null; }
   }
   // corrections from our additions file (a misspelt name, wording an official update changed): applied to both
   if(RULES.raw && applyCorrections()){ RULES.use(RULES.raw); await saveKey('rules', RULES.raw); }
