@@ -34,6 +34,17 @@ Get the latest version from [Releases](https://github.com/domas019-art/Open-Comp
 install, or the update zip to unzip over an existing copy. Windows releases are code-signed through the
 SignPath Foundation (free code signing for open-source projects) once the project is accepted.
 
+## Reporting a bug
+
+Open an [issue](https://github.com/domas019-art/Open-Compendium/issues/new?template=bug_report.md) and include:
+
+- the version number (at the foot of the Start page);
+- what happened and what you expected, and the steps to make it happen again;
+- a screenshot of the problem;
+- for anything about a character, its file: "Show file" on the Start page finds it (a `.json` in the Characters folder; zip it to attach it).
+
+Please don't attach anything from the Libraries folder: it is game content and can't be shared publicly.
+
 ## Building
 
 The program is built by GitHub from this repository (Actions → Build): `tools/build.sh` downloads Electron 44.9.3,
