@@ -22,6 +22,21 @@ See [tools/BUILD.md](tools/BUILD.md). A full release is the Electron engine with
 
 The version is in `app/package.json` and `APP_VERSION` in `app/web/compendium.js` (shown at the foot of the Start page).
 
+## Building
+
+The program is built by GitHub from this repository (Actions → Build): `tools/build.sh` downloads Electron 44.9.3,
+checks it against Electron's published checksums, brands the exe and adds `app/`. Every release zip comes from that build.
+
+## Code signing policy
+
+Releases will be signed once the project is accepted by SignPath Foundation (free code signing for open source).
+
+- Committers and reviewers: [domas019-art](https://github.com/domas019-art)
+- Approvers: [domas019-art](https://github.com/domas019-art)
+
+Privacy: this program does not transfer any information to other networked systems. It makes no internet connections at all;
+every web address is refused.
+
 ## Legal
 
 Open Compendium contains no game content: it reads library files you already own. It is an unofficial fan project, not affiliated with or endorsed by Wizards of the Coast. Dungeons & Dragons and D&D are trademarks of Wizards of the Coast LLC. The program's own code is under the MIT licence (see LICENSE); the Electron engine it runs on is under its own MIT licence.

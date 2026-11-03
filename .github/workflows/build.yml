@@ -1,0 +1,34 @@
+# Builds the Windows program from this repository's code, on GitHub's own computers.
+# A tag like v0.81 makes a release with both zips; "Run workflow" on the Actions page makes a test build.
+name: Build
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Branding tool
+        run: npm install --no-save --no-package-lock resedit@2
+      - name: Build
+        run: bash tools/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: open-compendium
+          path: |
+            build/Open-Compendium-*.zip
+            build/SHA256SUMS.txt
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Open Compendium ${GITHUB_REF_NAME#v}" --notes "Open-Compendium-…-update.zip: unzip into your Open Compendium folder (program closed). Open-Compendium-….zip: the whole program, for a new install."
+          gh release upload "$GITHUB_REF_NAME" build/Open-Compendium-*.zip build/SHA256SUMS.txt --clobber

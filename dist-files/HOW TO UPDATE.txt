@@ -1,0 +1,10 @@
+Open Compendium VERSION update
+==============================
+
+1. Close Open Compendium.
+2. Extract this zip into your Open Compendium folder (the one with "Open Compendium.exe" in it).
+   When Windows asks, choose "Replace the files in the destination".
+3. Start the program. The version at the foot of the Start page should say VERSION.
+
+Only the program's own files (resources\app and README.txt) are replaced.
+Your characters, pictures, library and settings are not touched.
