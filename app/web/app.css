@@ -58,6 +58,8 @@ tr.row.on{background:var(--sel)}
 .entry h1:first-child{margin-top:0}
 .entry h1.player,.entry h1.monster,.entry h1.familiar{background:#bbbbff}
 .entry h1.template{background:#c4b2e8}
+.entry h1.theme{background:#a9c8ec}
+.entry h4{font-size:15px;margin:14px 0 4px}
 /* a book's sidebar box kept with the entry it explains */
 .entry div.sidebar{margin:14px 0;padding:6px 14px 8px;background:var(--stat);border:1px solid var(--line);border-radius:6px}
 .entry div.sidebar h3{margin-top:6px}

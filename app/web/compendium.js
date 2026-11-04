@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99';
+const APP_VERSION = '0.99.1';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -198,7 +198,7 @@ async function libraryChangedBar(){
 async function wipe(){ try{ const db=await idb(); await new Promise(res=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').delete('library'); t.objectStore('kv').delete('rules'); t.oncomplete=res; }); }catch(e){} }
 
 /* ---------- helpers ---------- */
-const CAT_LABEL = {[ALL]:'Everything', epicdestiny:'Epic Destiny', paragonpath:'Paragon Path', monstertemplate:'Monster Template'};
+const CAT_LABEL = {[ALL]:'Everything', epicdestiny:'Epic Destiny', paragonpath:'Paragon Path', monstertemplate:'Monster Template', monstertheme:'Monster Theme'};
 const catLabel = c => CAT_LABEL[c] || c.charAt(0).toUpperCase()+c.slice(1);
 const nameCol = c => Math.max(0, c.cols.indexOf('Name'));
 const srcCol = c => c.cols.findIndex(x=>/^source/i.test(x));
