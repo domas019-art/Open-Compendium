@@ -59,6 +59,11 @@ tr.row.on{background:var(--sel)}
 .entry h1.player,.entry h1.monster,.entry h1.familiar{background:#bbbbff}
 .entry h1.template{background:#c4b2e8}
 .entry h1.theme{background:#a9c8ec}
+/* the action type above a power in newer theme blocks (STANDARD ACTIONS ...) */
+.entry p.tsec{margin:10px 0 0;padding:2px 12px;background:#6f9fd8;color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.entry p.tsec+p.tpower{margin-top:0}
+/* a theme's power lines: a clear bar so each power stands out from the advice around it */
+.entry p.flavor.tpower{background:#d6e5f7;color:#1a1a1a;border-left:4px solid #6f9fd8;font-size:15px;padding:5px 12px;margin-top:8px}
 .entry h4{font-size:15px;margin:14px 0 4px}
 /* a book's sidebar box kept with the entry it explains */
 .entry div.sidebar{margin:14px 0;padding:6px 14px 8px;background:var(--stat);border:1px solid var(--line);border-radius:6px}
