@@ -61,6 +61,11 @@ tr.row.on{background:var(--sel)}
 /* a book's sidebar box kept with the entry it explains */
 .entry div.sidebar{margin:14px 0;padding:6px 14px 8px;background:var(--stat);border:1px solid var(--line);border-radius:6px}
 .entry div.sidebar h3{margin-top:6px}
+/* the powers part of a template's stat block gets its own band, as in the book */
+.entry h2.tmplpowers{font-size:14px;margin:8px 0 0;padding:3px 12px;background:#bbbbff;color:#1a1a1a}
+/* a worked example inside a rules entry: framed so its start and end are clear */
+.entry div.sample{margin:14px 0;padding:2px 12px 10px;border:2px dashed #a99bdb;border-radius:6px}
+.entry div.sample h3{margin-top:8px}
 .entry h1.atwillpower{background:#6fdc6f}
 .entry h1.encounterpower{background:#f26b6b}
 .entry h1.dailypower{background:#9a9a9a}
