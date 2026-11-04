@@ -1191,10 +1191,16 @@ function specRow(k,v){
     }
     const txt=part.replace(/\r/g,'').replace(/\n\s*\n+/g,'\n').replace(/^\s+|\s+$/g,'');
     if(!txt && !first) continue;
-    out.push(el('p',{class:'prel'}, first?el('b',{text:k+': '}):null, txt));
+    out.push(el('p',{class:'prel'}, first?el('b',{text:k+': '}):null, ...boldLabels(txt)));
     first=false;
   }
   return out;
+}
+// the parts of a power written into one field ("Trigger: ...", "Effect (Free Action): ...", "Level 11: ...") get their
+// label in bold, as on a printed card
+const LABELS=/((?:^|(?<=[\n.;)] ?))(?:Primary |Secondary )?(?:Attack|Hit|Miss|Effect|Trigger|Aftereffect|Malfunction|Special|Requirement|Prerequisite|Target|Sustain (?:Minor|Move|Standard)|First Failed Saving Throw|Second Failed Saving Throw|Failed Saving Throw|Level \d+(?: or \d+)?)(?: \([^)]*\))?:)/;
+function boldLabels(txt){
+  return txt.split(new RegExp(LABELS.source,'g')).map((p,i)=>i%2 ? el('b',{text:p}) : p).filter(p=>p!=='');
 }
 // a prerequisite as a person would write it: the builder's own bookkeeping ("!Deity of the Arcana domain" = has no
 // other deity yet, "~...", "ID_...") is left out
