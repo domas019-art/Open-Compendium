@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.87';
+const APP_VERSION = '0.88';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -42,7 +42,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=5;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=6;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -133,6 +133,14 @@ function applyCorrections(){
   const sw=(t,f)=>typeof t==='string' ? t.split(f.spec.Wrong).join(f.name) : t;
   for(const f of fixes){
     const only=f.spec.Only ? new Set(f.spec.Only.split(',').map(x=>x.trim())) : null;
+    /* "Field" (optional) names one line of a builder entry (Hit, Effect, Secondary Attack…): only that line is
+       corrected, and the compendium is left alone (it already has the right text). */
+    const field=f.spec.Field?.trim();
+    if(field){
+      for(const o of RULES.raw) if(o!==f && (!only || only.has(o.id)) && o.spec)
+        for(const k of Object.keys(o.spec)) if(k.trim()===field) o.spec[k]=sw(o.spec[k],f);   // a second attack's lines are indented
+      continue;
+    }
     for(const o of RULES.raw){
       if(o===f || (only && !only.has(o.id))) continue;
       const was=o.name; o.name=sw(o.name,f); if(o.name!==was) (o.also ||= []).push(was);   // the old spelling still finds it
