@@ -85,6 +85,8 @@ tr.row.on{background:var(--sel)}
 .entry p.publishedIn{color:var(--muted);font-size:13px;font-style:italic;margin-top:20px}
 .entry table{border-collapse:collapse;margin:8px 0}
 .entry td,.entry th{border:1px solid var(--line);padding:4px 8px;position:static;text-transform:none;letter-spacing:0;font-size:inherit;color:inherit;cursor:auto}
+/* a die face shown as its number in a small box (Recharge 5 6) */
+.die{display:inline-block;min-width:1.2em;height:1.2em;line-height:1.1em;border:1.5px solid currentColor;border-radius:3px;text-align:center;font-size:.82em;font-weight:700;margin:0 1px;vertical-align:.08em;box-sizing:border-box;padding:0 1px}
 .term{border-bottom:1px dotted var(--accent);cursor:pointer}
 .term:hover{background:var(--hover)}
 

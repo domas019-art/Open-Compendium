@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.95';
+const APP_VERSION = '0.96';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -501,7 +501,22 @@ function termIndex(){
 
 // ordinary phrases that start with a rules word but don't mean it
 const NOT_TERMS=[/^pick (up|it|them)\b/i];
+// the die-face characters (recharge 5 6 and the like) are too small to read in most fonts: show each as its number in a little box
+const DIE='⚀⚁⚂⚃⚄⚅';
+function showDice(root){
+  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes=[];
+  while(w.nextNode()) if(/[⚀-⚅]/.test(w.currentNode.nodeValue)) nodes.push(w.currentNode);
+  for(const n of nodes){
+    const frag=document.createDocumentFragment();
+    for(const part of n.nodeValue.split(/([⚀-⚅])/)){
+      if(part.length===1 && DIE.includes(part)){ const d=document.createElement('span'); d.className='die'; d.textContent=DIE.indexOf(part)+1; d.title='a roll of '+d.textContent; frag.append(d); }
+      else if(part) frag.append(part);
+    }
+    n.replaceWith(frag);
+  }
+}
 function linkTerms(root, selfKey){
+  showDice(root);
   const T=termIndex(); if(!T.re) return;
   const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes=[];
   while(w.nextNode()){ const n=w.currentNode; if(!n.parentElement.closest('h1,.term,.publishedIn,.empty,.notice')) nodes.push(n); }
