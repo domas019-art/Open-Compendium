@@ -57,6 +57,10 @@ tr.row.on{background:var(--sel)}
 .entry h1{font-size:18px;margin:18px 0 0;padding:6px 12px;color:#1a1a1a;background:#c9c9d6;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;gap:12px}
 .entry h1:first-child{margin-top:0}
 .entry h1.player,.entry h1.monster,.entry h1.familiar{background:#bbbbff}
+.entry h1.template{background:#c4b2e8}
+/* a book's sidebar box kept with the entry it explains */
+.entry div.sidebar{margin:14px 0;padding:6px 14px 8px;background:var(--stat);border:1px solid var(--line);border-radius:6px}
+.entry div.sidebar h3{margin-top:6px}
 .entry h1.atwillpower{background:#6fdc6f}
 .entry h1.encounterpower{background:#f26b6b}
 .entry h1.dailypower{background:#9a9a9a}
