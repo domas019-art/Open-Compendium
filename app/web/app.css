@@ -694,3 +694,6 @@ body.sheetmode #bSheet{display:none}
 dialog.askdlg{max-width:440px;border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:var(--panel);color:var(--ink)}
 dialog.askdlg p{margin:0}
 #tabs button[hidden]{display:none}
+
+/* a choice that belongs to the pick above it (a feat's own choice) sits indented under it */
+.slot.subslot{margin-left:22px;padding-left:10px;border-left:3px solid var(--line)}

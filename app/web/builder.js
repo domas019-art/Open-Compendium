@@ -166,7 +166,14 @@ const Builder={
   },
   slotsFor(step){
     const order=t=>{ const i=TYPE_ORDER.indexOf(t); return i<0?99:i; };
-    return this.st.slots.filter(s=>this.stepOf(s)===step).sort((a,b)=>(a.level||1)-(b.level||1) || order(a.type)-order(b.type));
+    const list=this.st.slots.filter(s=>this.stepOf(s)===step).sort((a,b)=>(a.level||1)-(b.level||1) || order(a.type)-order(b.type));
+    // a choice that belongs to something picked in another choice (Extra Manifestation's manifestation) goes right under it
+    const by=new Map(); for(const s of list) for(const p of this.picksOf(s)) by.set(p,s);
+    const kids=new Map(), top=[];
+    const anchor=id=>/^(Class|Race|Theme|Background|Paragon Path|Epic Destiny|Hybrid Class|Build)$/.test(RULES.db.els[id]?.type||'');   // whole steps hang off these: no nesting
+    for(const s of list){ const par=anchor(s.owner)?null:by.get(s.owner); if(par && par!==s){ if(!kids.has(par)) kids.set(par,[]); kids.get(par).push(s); s.sub=true; } else { top.push(s); s.sub=false; } }
+    const out=[], put=s=>{ out.push(s); for(const k of kids.get(s)||[]) put(k); }; top.forEach(put);
+    return out.length===list.length ? out : list;
   },
   picksOf(slot){ return this.ch.picks[slot.key] || (slot.def ? [slot.def] : []); },
   openIn(step){ return this.slotsFor(step).filter(s=>!s.optional && this.picksOf(s).length<s.number).length; },
@@ -638,12 +645,12 @@ const Builder={
     const head=el('div',{class:'slothead'},
       el('span',{class:'slottitle',text:slotTitle(slot)}),
       slot.extra ? el('span',{class:'hb small',text:'house rule'}) : null,
-      owner && !['Level','Level1Rules','Internal'].includes(owner.type) ? el('span',{class:'muted small',text:'from '+owner.name}) : null,
+      owner && !['Level','Level1Rules','Internal'].includes(owner.type) && !slotTitle(slot).startsWith(owner.name) ? el('span',{class:'muted small',text:'from '+owner.name}) : null,
       need ? el('span',{class:'need',text: slot.number>1 ? `${slot.number-picks.length} to choose` : 'choose'}) : null,
       slot.extra && picks[0] ? el('span',{class:'muted small',text:'level '+slot.level}) : null,
       slot.extra ? el('button',{class:'x',type:'button',title:'Remove this extra slot','aria-label':'Remove extra slot',text:'×',onclick:()=>{
         ch.extra[slot.type]=(ch.extra[slot.type]||[]).filter(u=>u!==slot.uid); delete ch.picks[slot.key]; this.changed(); }}) : null);
-    const row=el('div',{class:'slot'+(need?' needs':'')}, head);
+    const row=el('div',{class:'slot'+(need?' needs':'')+(slot.sub?' subslot':'')}, head);
     if(slot.noImplements && !picks.length) row.append(el('p',{class:'muted small',text:'Not needed: this character has no implement proficiency, so an implement choice would never apply. It only counts if the character later gains one (a multiclass feat, say).'}));
 
     if(slot.extra && slot.inactive){
@@ -1077,7 +1084,7 @@ function slotTitle(slot){
   const names={'Race Ability Bonus':'Racial ability bonus','Skill Training':'Trained skills','Class Feature':'Class feature','Racial Trait':'Racial option','Build':'Build','Background Choice':'Background benefit','Theme':'Theme','Deity':'Deity'};
   let t=names[slot.type]||slot.type;
   if(['Racial Trait','Class Feature'].includes(slot.type) && slot.cat && !/ID_|\||\$\$|^\d+$/.test(slot.cat)) t=slot.cat.split(',').map(x=>x.trim()).join(': ');
-  else if(['Racial Trait','Class Feature'].includes(slot.type) && fromOwner) t=o.name;
+  else if(['Racial Trait','Class Feature'].includes(slot.type) && fromOwner) t=o.name+(slot.sub?' choice':'');   // under its feat: "Extra Manifestation choice", not the feat's name again
   if(slot.number>1) t+=` (choose ${slot.number})`;
   if(slot.optional) t+=' (optional)';
   return t;
