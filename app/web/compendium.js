@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.98';
+const APP_VERSION = '0.99';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -608,6 +608,20 @@ document.addEventListener('click',e=>{
   closePop();
 });
 $('#detail').addEventListener('scroll',closePop);
+// Up and Down arrows step through the list (in the compendium tab, outside text boxes other than the search box)
+document.addEventListener('keydown',e=>{
+  if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
+  if(e.altKey || e.ctrlKey || e.metaKey || document.querySelector('dialog[open]')) return;
+  if($('#app').style.display!=='grid') return;
+  const a=document.activeElement;
+  if(a && a!==$('#q') && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+  const rows=[...document.querySelectorAll('#tbody tr.row')]; if(!rows.length) return;
+  const i=rows.findIndex(r=>r.classList.contains('on'));
+  const j= i<0 ? 0 : Math.max(0,Math.min(rows.length-1, i+(e.key==='ArrowDown'?1:-1)));
+  e.preventDefault();
+  if(j===i) return;
+  rows[j].click(); rows[j].scrollIntoView({block:'nearest'});
+});
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 // drag a tab to swap the order of Compendium and Character Builder (remembered)
 (()=>{
