@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.4';
+const APP_VERSION = '0.99.5';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -42,7 +42,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=9;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=10;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -74,8 +74,9 @@ async function readLibrary(list){
     try{ RULES.load(t); merged=f; break; }catch(e){ console.warn('rules skipped',f.p,e); }
   }
   const ours=f=>/open-compendium/i.test(base(f));
-  // every .part is read, not only those changed after the merged file: fixing the merged file must not hide a part
-  const parts=list.filter(f=>/\.part$/i.test(f.p)).sort((a,b)=>base(a).localeCompare(base(b)));
+  // a .part is read when it is ours or changed after the merged file was made (older ones are already inside it).
+  // So whenever the merged file is rewritten, a part that is not yet inside it must be saved again after it.
+  const parts=list.filter(f=>/\.part$/i.test(f.p) && (!merged || ours(f) || f.m>merged.m)).sort((a,b)=>base(a).localeCompare(base(b)));
   for(const f of parts){
     await status(`Reading ${base(f)}…`);
     const t=await text(f); if(!/<D20Rules/.test(t.slice(0,600))) continue;
