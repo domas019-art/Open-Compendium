@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.91';
+const APP_VERSION = '0.92';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -42,7 +42,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=7;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=8;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -145,6 +145,7 @@ function applyCorrections(){
           const at=before ? keys.findIndex(k=>k.trim()===before) : -1, spec={};
           keys.forEach((k,i)=>{ if(i===at) spec[field]=f.name; spec[k]=o.spec[k]; }); if(at<0) spec[field]=f.name;
           o.spec=spec; continue; }
+        if(field==='(source)'){ o.source=sw(o.source,f); continue; }   // the book a builder entry says it is from
         for(const k of keys) if(k.trim()===field) o.spec[k]=sw(o.spec[k],f);   // a second attack's lines are indented
       }
       continue;
