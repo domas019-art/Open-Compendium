@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.89';
+const APP_VERSION = '0.90';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -137,8 +137,16 @@ function applyCorrections(){
        corrected, and the compendium is left alone (it already has the right text). */
     const field=f.spec.Field?.trim();
     if(field){
-      for(const o of RULES.raw) if(o!==f && (!only || only.has(o.id)) && o.spec)
-        for(const k of Object.keys(o.spec)) if(k.trim()===field) o.spec[k]=sw(o.spec[k],f);   // a second attack's lines are indented
+      const add=f.spec.Wrong.trim()==='(missing)', before=f.spec.Before?.trim();
+      for(const o of RULES.raw) if(o!==f && (!only || only.has(o.id)) && o.spec){
+        const keys=Object.keys(o.spec);
+        // Wrong "(missing)": the line is not there at all, so it is added (in front of the line named in "Before")
+        if(add){ if(keys.some(k=>k.trim()===field)) continue;
+          const at=before ? keys.findIndex(k=>k.trim()===before) : -1, spec={};
+          keys.forEach((k,i)=>{ if(i===at) spec[field]=f.name; spec[k]=o.spec[k]; }); if(at<0) spec[field]=f.name;
+          o.spec=spec; continue; }
+        for(const k of keys) if(k.trim()===field) o.spec[k]=sw(o.spec[k],f);   // a second attack's lines are indented
+      }
       continue;
     }
     for(const o of RULES.raw){
