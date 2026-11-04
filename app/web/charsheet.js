@@ -358,7 +358,7 @@ Object.assign(Builder,{
     });
   },
   nextTurn(){
-    const P=this.play(); P.actions={}; delete P.prompt;
+    const P=this.play(); P.actions={}; delete P.prompt; delete P.petActed;
     const keep=x=>{ if(x.dur==='start of your next turn') return false;
       if(x.dur==='end of your next turn'){ x.turns=(x.turns||0)+1; return x.turns<2; }
       return true; };
@@ -379,7 +379,7 @@ Object.assign(Builder,{
     if(P.familiar==='destroyed') P.familiar='passive';   // it comes back after a short rest
     // companions from a card (fey beasts) regain all their hit points at the end of a short rest
     for(const pet of this.pets()) if(pet.card && P.pets?.[pet.key]) delete P.pets[pet.key];
-    delete P.prompt; delete P.quarry;
+    delete P.prompt; delete P.quarry; delete P.petActed;
   },
   extendedRest(){
     const P=this.play();
@@ -467,12 +467,14 @@ Object.assign(Builder,{
       const u=sp(p,'Power Usage'), limited=/encounter|daily/i.test(u), used=!!P.used[p.id] || (p.name==='Second Wind' && !!P.secondWind);
       const calc=p===CHARGE ? this.chargeCalc() : this.powerCalc(p), first=calc.rows[0], gate=p===CHARGE||p.virtual?null:this.powerGate(p);
       const beastBasic=this.isBeastBasic(p), free=beastBasic && (this.ch.details?.freeBeasts || P.prompt?.free);
+      // free-acting companions (house rule): each companion makes one basic attack of its own a turn
+      const petKey=p.pet ? 'pet:'+p.pet.name : p.id, ownTurn=beastBasic && this.ch.details?.freeBeasts && !P.prompt, petDone=ownTurn && !!(P.petActed||{})[petKey];
       const owner=p.pet ? p.pet.name+(p.pet.name!==p.pet.kind?' ('+p.pet.kind+')':'') : /beast'?s attack bonus/i.test(sp(p,'Attack')) ? (this.ch.details?.freeBeasts && sp(p,'Display')!=='Beast Basic Attack' && this.pets().length>1 ? 'any beast companion' : this.pets()[0]?.name+(this.pets()[0]&&this.pets()[0].name!==this.pets()[0].kind?' ('+this.pets()[0].kind+')':'')) : '';
       const summary=first ? `${first.weapon!=='—'?first.weapon+': ':''}${fmt(first.atk)} vs ${first.def}${first.dmg?' · '+first.dmg:''}` : calc.summary||'';
       const akind=this.activeKind(p), isAct=akind && this.isActive(p), utype=/at-will/i.test(u)?'atwill':/encounter/i.test(u)?'encounter':/daily/i.test(u)?'daily':'atwill';
       const ak=this.actionKey(sp(p,'Action Type')), pplan=!used && !free && !p.aura && ak ? this.planActions([ak]) : [];
-      const noAct=pplan.length>0 && !pplan[0].from;
-      const row=el('div',{class:'pcard2'+(used?' used':'')+(gate&&!gate.ok?' gated':'')+(gate&&gate.ok?' ready':'')+(noAct?' noact':'')+(beastBasic&&P.prompt&&(!p.pet||this.ch.details?.freeBeasts)?' prompt':'')+(p.aura?' aura':'')+(isAct?' active act-'+utype:''),title:noAct?'No '+this.actionKey(sp(p,'Action Type'))+' action left this turn':''},
+      const noAct=(pplan.length>0 && !pplan[0].from) || petDone;
+      const row=el('div',{class:'pcard2'+(used?' used':'')+(gate&&!gate.ok?' gated':'')+(gate&&gate.ok?' ready':'')+(noAct?' noact':'')+(beastBasic&&P.prompt&&(!p.pet||this.ch.details?.freeBeasts)?' prompt':'')+(p.aura?' aura':'')+(isAct?' active act-'+utype:''),title:petDone?'This companion has already made its basic attack this turn':noAct?'No '+this.actionKey(sp(p,'Action Type'))+' action left this turn':''},
         el('button',{class:'pmain',type:'button','aria-expanded':'false'},
           el('div',{class:'ptitle'}, p===CHARGE?el('span',{class:'udot u0'}):p.virtual?el('span',{class:'udot '+(p.aura?'ua':'u0')}):usageDot(p), el('b',{text:p.name}), isAct?el('span',{class:'activetag act-'+utype,text:'Active'}):null),
           owner ? el('div',{class:'powner',text:owner}) : null,
@@ -483,15 +485,17 @@ Object.assign(Builder,{
           P.quarry && calc.rows.some(r=>r.dmg) && !p.pet && !/beast'?s attack bonus/i.test(sp(p,'Attack')) ? el('div',{class:'phint',text:this.quarryText()}) : null,
           ...(calc.rows.some(r=>r.dmg) && !p.pet && !isAct ? this.activeReminders(String(sp(p,'Attack Type')||'')+' '+calc.rows.map(r=>r.range||'').join(' ')).map(t=>el('div',{class:'phint rage',text:t})) : []),
           gate ? el('div',{class:'pgate',text:gate.text || (gate.ok?'Available: you are bloodied':'Only while bloodied')}) : null),
-        p.aura ? el('span',{class:'muted small',text:'always on'}) : el('button',{class:'btn small puse'+(used?' on':''),type:'button',text:used?'Used':'Use',
-          title:limited?(used?'Mark as available again':'Mark as used (and the action it takes)'):'Mark the action it takes',
-          onclick:()=>{ if(used){ delete P.used[p.id]; if(p.name==='Second Wind') P.secondWind=false; }
+        p.aura ? el('span',{class:'muted small',text:'always on'}) : el('button',{class:'btn small puse'+(used||petDone?' on':''),type:'button',text:used||petDone?'Used':'Use',
+          title:petDone?'Mark as available again':limited?(used?'Mark as available again':'Mark as used (and the action it takes)'):'Mark the action it takes',
+          onclick:()=>{ if(petDone){ delete P.petActed[petKey]; }      // marked by mistake: available again
+            else if(used){ delete P.used[p.id]; if(p.name==='Second Wind') P.secondWind=false; }
             else if(p.name==='Second Wind'){ if(!this.secondWind()) return; P.used[p.id]=1; }      // the same as the button in the bar
             else {
               if(limited) P.used[p.id]=1;
               if(p.name==="Hunter's Quarry") P.quarry=true;
               if(akind) this.startActive(p);
               if(!free) this.planActions(pplan.map(x=>x.k),true);
+              if(ownTurn) (P.petActed ||= {})[petKey]=1;
               if(beastBasic) delete P.prompt;
               // "your beast companion makes a melee basic attack against the target (as a free action)"
               const t=sp(p,'Effect')+' '+sp(p,'Hit');
