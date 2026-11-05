@@ -243,14 +243,17 @@ const Builder={
       box.append(el('div',{class:'ghead'},el('strong',{text:title}),btn('Select all',()=>setAll(list,true)),btn('Select none',()=>setAll(list,false))), grid);
     }
     if(advs.length){
-      const grid=el('div',{class:'list'});
-      for(const a of advs){
-        const cb=el('input',{type:'checkbox',checked:advOn.has(a)}); boxes.set(a,cb);
-        cb.onchange=()=>setAdv(a,cb.checked);
-        const l=el('label',{title:a},cb,el('span',{text:a})); grid.append(l); items.push([l,a.toLowerCase()]);
-      }
       box.append(el('div',{class:'ghead'},el('strong',{text:'Adventures'}),btn('Select none',()=>advs.forEach(a=>setAdv(a,false)))),
-        el('p',{class:'muted small',text:'Adventures never limit what a character can take: their items stay available either way. Ticking one also ticks the books it needs; a needed book that is unticked shows in red.'}), grid);
+        el('p',{class:'muted small',text:'Adventures never limit what a character can take: their items stay available either way. Ticking one also ticks the books it needs; a needed book that is unticked shows in red.'}));
+      for(const [set,names] of advGroups(advs)){
+        const grid=el('div',{class:'list advlist'});
+        for(const a of names){
+          const cb=el('input',{type:'checkbox',checked:advOn.has(a)}); boxes.set(a,cb);
+          cb.onchange=()=>setAdv(a,cb.checked);
+          const t=advTitle(a), l=el('label',{title:t},cb,el('span',{text:t})); grid.append(l); items.push([l,(t+' '+a).toLowerCase()]);
+        }
+        box.append(el('div',{class:'gsub',text:set}), grid);
+      }
     }
     paint();
     $('#campCount').textContent=this.campaignLine();
@@ -1377,7 +1380,7 @@ function builderBooks(){
     for(const id of RULES.db.byType[t]||[]) sourcesOf(RULES.db.els[id]).forEach(s=>set.add(s));
   const every=[...set];
   _builderBooks={db:RULES.db, list:every.filter(b=>!isAdventure(b)),
-    advs:every.filter(isAdventure).sort((a,b)=>stripThe(a).localeCompare(stripThe(b),undefined,{sensitivity:'base',numeric:true}))};
+    advs:every.filter(isAdventure).sort(advSort)};
   return _builderBooks.list;
 }
 function builderAdventures(){ builderBooks(); return _builderBooks.advs; }
