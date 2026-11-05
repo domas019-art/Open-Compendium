@@ -14,11 +14,11 @@ const SECTIONS=[['start','Start'],['build','Build'],['shop','Shop'],['manage','M
 const STEPS=[['class','Class'],['race','Race'],['background','Background'],['abilities','Ability Scores'],['skills','Skills'],['powers','Powers'],['feats','Feats']];
 const STEP_HAS_SHOWALL=new Set(['class','race','background','skills','powers','feats']);
 // where each kind of choice is shown
-const TYPE_STEP={'CountsAsRace':'race','Paragon Path':'class','Epic Destiny':'class','Class':'class','Build':'class','Deity':'class','Theme':'class','Race':'race','Race Ability Bonus':'abilities','Language':'race',
+const TYPE_STEP={'CountsAsRace':'race','Paragon Path':'class','Epic Destiny':'class','Class':'class','Build':'class','Deity':'class','Theme':'background','Race':'race','Race Ability Bonus':'abilities','Language':'race',
   'Background':'background','Background Choice':'background','Gender':'background','Alignment':'background','Skill Training':'skills','Power':'powers','Feat':'feats'};
 // for other choices, look at what they came from
-const OWNER_STEP={'Feat':'feats','Power':'powers','Race':'race','Racial Trait':'race','Class':'class','Class Feature':'class','Build':'class','Theme':'class','Background':'background','Background Choice':'background','Deity':'class'};
-const TYPE_ORDER=['Class','Hybrid Class','Build','Class Feature','Paragon Path','Epic Destiny','Deity','Theme','Race','Race Ability Bonus','Racial Trait','Language','Background','Background Choice','Gender','Alignment'];
+const OWNER_STEP={'Feat':'feats','Power':'powers','Race':'race','Racial Trait':'race','Class':'class','Class Feature':'class','Build':'class','Theme':'background','Background':'background','Background Choice':'background','Deity':'class'};
+const TYPE_ORDER=['Class','Hybrid Class','Build','Class Feature','Paragon Path','Epic Destiny','Deity','Race','Race Ability Bonus','Racial Trait','Language','Theme','Background','Background Choice','Gender','Alignment'];
 const INLINE_TYPES=new Set(['Race Ability Bonus','Language','Skill Training','Gender','Alignment','Background Choice']);
 const isInline=t=>INLINE_TYPES.has(t) || /^Ability Increase/.test(t);
 
@@ -141,6 +141,8 @@ const Builder={
     if(slot.type==='Power' && !/\$\$CLASS/.test(slot.cat) && this.cameFrom(slot,['Race','Racial Trait'])) return 'race';
     if(TYPE_STEP[slot.type]) return TYPE_STEP[slot.type];
     if(/^Ability Increase/.test(slot.type)) return 'abilities';
+    // a theme can need the race (Knight of Synnoria: Llewyrr elf), so it and its own choices sit in Background, after Race
+    if(this.cameFrom(slot,['Theme'])) return 'background';
     if(slot.type==='Class Feature' && !this.cameFrom(slot,['Race','Racial Trait'])) return 'class';
     if(this.cameFrom(slot,['Race','Racial Trait'])) return 'race';
     let id=slot.owner, guard=0, fallback=null;
