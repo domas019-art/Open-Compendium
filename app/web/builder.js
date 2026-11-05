@@ -216,7 +216,7 @@ const Builder={
   },
   renderCampaignBooks(){
     const box=$('#campBody'), all=builderBooks();
-    const advs=builderAdventures(), advOn=new Set(this.camp().adventures||[]);
+    const advs=builderAdventures(), advOn=new Set((this.camp().adventures||[]).map(advKey));
     const enabled=new Set(this.camp().books||all);
     const labels=new Map();
     const paint=()=>{ const need=new Set(); advs.filter(a=>advOn.has(a)).forEach(a=>advNeeds(a).forEach(n=>need.add(n)));
@@ -1379,8 +1379,7 @@ function builderBooks(){
   for(const t of ['Race','Class','Feat','Power','Background','Theme','Deity','Build','Racial Trait','Class Feature','Paragon Path','Epic Destiny','Language','Skill Training','Magic Item','Armor','Weapon','Gear','Superior Implement','Ritual'])
     for(const id of RULES.db.byType[t]||[]) sourcesOf(RULES.db.els[id]).forEach(s=>set.add(s));
   const every=[...set];
-  _builderBooks={db:RULES.db, list:every.filter(b=>!isAdventure(b)),
-    advs:every.filter(isAdventure).sort(advSort)};
+  _builderBooks={db:RULES.db, list:every.filter(b=>!isAdventure(b)), advs:ADVENTURE_LIST};      // every known adventure, as in the compendium
   return _builderBooks.list;
 }
 function builderAdventures(){ builderBooks(); return _builderBooks.advs; }

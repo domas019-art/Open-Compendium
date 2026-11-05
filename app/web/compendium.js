@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.66';
+const APP_VERSION = '0.99.67';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -217,7 +217,8 @@ function bookOk(v,cat){
   const b=bookTokens(v); if(!b.length) return true;
   const strict=ADV_STRICT.has(cat); let any=false;
   for(const x of b){
-    if(isAdventure(bookLabel(x))){ if(strict && S.advOn.has(x)) return true; continue; }
+    const lb=bookLabel(x);
+    if(isAdventure(lb)){ if(strict && S.advOn.has(advKey(lb))) return true; continue; }
     any=true; if(!S.hidden.has(x)) return true;
   }
   return !any && !strict;
@@ -353,14 +354,17 @@ const ADVENTURE_SETS = [
     ["H1 Keep on the Shadowfell",{lv:'1–3'}], ["H2 Thunderspire Labyrinth",{lv:'4–6',needs:['PHB','DMG','MM']}], ["H3 Pyramid of Shadows",{lv:'7–10',needs:['PHB','DMG','MM']}],
     ["P1 King of the Trollhaunt Warrens",{lv:'11–13',needs:['PHB','DMG','MM']}], ["P2 Demon Queen Enclave",{lv:'14–17',needs:['PHB','DMG','MM']}], ["P3 Assault on Nightwyrm Fortress",{lv:'17–20',needs:['PHB','DMG','MM']}],
     ["E1 Death's Reach",{lv:'21–23',needs:['PHB','DMG','MM']}], ["E2 Kingdom of the Ghouls",{lv:'24–26',needs:['PHB','DMG','MM']}], ["E3 Prince of Undeath",{lv:'27–30',needs:['PHB','DMG','MM']}]]],
+  ['Scales of War', [
+    ["Rescue at Rivenroar",{lv:'1'}], ["Siege of Bordrin's Watch",{lv:'3'}], ["The Shadow Rift of Umbraforge",{lv:'4'}], ["The Lost Mines of Karak",{lv:'6'}],
+    ["Den of the Destroyer",{lv:'7'}], ["The Temple Between",{lv:'9'}], ["Fist of Mourning",{lv:'10'}], ["Beyond the Mottled Tower",{lv:'11'}]]],
   ['HS series', [["HS1 The Slaying Stone",{lv:'1'}], ["HS2 Orcs of Stonefang Pass",{lv:'5',needs:['PHB','DMG','MM']}]]],
   ['D&D Encounters seasons', [
     ["Beyond the Crystal Cave",{lv:'1–3',show:'Season 7: Beyond the Crystal Cave'}], ["Web of the Spider Queen",{lv:'1–3',show:'Season 9: Web of the Spider Queen'}],
     ["Council of Spiders",{lv:'1–3',show:'Season 10: Council of Spiders'}]]],
   ['Other adventures', [
     ["FR1 Scepter Tower of Spellgard",{lv:'2–4',needs:['PHB','DMG','MM']}], ["Marauders of the Dune Sea",{lv:'2',needs:['PHB','DMG']}], ["Seekers of the Ashen Crown",{lv:'2–5'}],
-    ["Halls of Undermountain",{lv:'1–5'}], ["Hammerfast",{lv:'1–10'}], ["Madness at Gardmore Abbey",{lv:'6–8'}], ["Tomb of Horrors",{lv:'10–22'}],
-    ["Revenge of the Giants",{lv:'12–18'}], ["Vor Rukoth",{}], ["Vor Rukoth: An Ancient Ruins Adventure Site",{}]]],
+    ["Halls of Undermountain",{lv:'1–5'}], ["Hammerfast",{lv:'1–10'}], ["Madness at Gardmore Abbey",{lv:'6–8'}], ["Tomb of Horrors",{lv:'10–22',needs:['PHB','DMG','MM']}],
+    ["Revenge of the Giants",{lv:'12–18'}], ["Vor Rukoth",{}], ["Vor Rukoth: An Ancient Ruins Adventure Site",{alias:'Vor Rukoth'}]]],
   ['RPGA and DM Rewards', [
     ["RPGA Treasure of Talon Pass",{lv:'2'}], ["RPGA Khyber's Harvest",{lv:'2'}], ["RPGA Village of Hommlet",{lv:'4–5'}], ["RPGA Tomb of Horrors",{lv:'9'}]]],
   ['Living Forgotten Realms', [
@@ -369,6 +373,10 @@ const ADVENTURE_SETS = [
 const ADVENTURES = {};
 ADVENTURE_SETS.forEach(([set,list],si)=>list.forEach(([name,o],i)=>{ ADVENTURES[name]={...o, set, ord:si*1000+i}; }));
 const isAdventure = name => Object.prototype.hasOwnProperty.call(ADVENTURES,name);
+// a second spelling of the same adventure counts as that adventure
+const advKey = name => (ADVENTURES[name]||{}).alias || name;
+// every adventure shown in the book lists (the same list in the compendium and the builder), in set order
+const ADVENTURE_LIST = Object.keys(ADVENTURES).filter(n=>!ADVENTURES[n].alias).sort((a,b)=>ADVENTURES[a].ord-ADVENTURES[b].ord);
 // what an adventure needs, as full book names (the builder's names); bookLabel turns compendium codes into those
 const advNeeds = name => ((ADVENTURES[name]||{}).needs||[]).map(bookLabel);
 // the name shown in the book lists: its set name plus its levels
@@ -382,8 +390,10 @@ const ADV_STRICT = new Set(['monster']);
 function buildBooks(){
   const set=new Set();
   for(const c of Object.values(lib)){ const sc=srcCol(c); if(sc<0) continue; c.rows.forEach(r=>bookTokens(r[sc]).forEach(b=>set.add(b))); }
-  const every=[...set], advs=every.filter(b=>isAdventure(bookLabel(b))).sort((a,b)=>advSort(bookLabel(a),bookLabel(b)));
-  const all=every.filter(b=>!advs.includes(b)); S.books=all; S.advs=advs;
+  // adventures go by name (every known one is listed, with or without entries here); older settings stored codes
+  const every=[...set], advs=ADVENTURE_LIST;
+  S.advOn=new Set([...S.advOn].map(x=>advKey(bookLabel(x))).filter(isAdventure));
+  const all=every.filter(b=>!isAdventure(bookLabel(b))); S.books=all; S.advs=advs;
   const mags=all.filter(isMagazine).sort((a,b)=>bookLabel(a).localeCompare(bookLabel(b),undefined,{numeric:true}));
   const mains=all.filter(b=>!isMagazine(b)).sort((a,b)=>stripThe(bookLabel(a)).localeCompare(stripThe(bookLabel(b)),undefined,{sensitivity:'base',numeric:true}));
   const panel=$('#bookPanel'); panel.replaceChildren();
@@ -427,11 +437,10 @@ function buildBooks(){
     h.append(t, btn('Select none',()=>codes.forEach(a=>setAdv(a,false))));
     const n=document.createElement('p'); n.className='muted small'; n.textContent='A monster or NPC found only in an adventure shows when that adventure is ticked. Its items and traps are always listed. Ticking an adventure also ticks the books it needs; a needed book that is unticked shows in red.';
     panel.append(h,n);
-    const byLabel=new Map(codes.map(c=>[bookLabel(c),c]));
-    for(const [set,names] of advGroups(byLabel.keys())){
+    for(const [set,names] of advGroups(codes)){
       const sh=document.createElement('div'); sh.className='gsub'; sh.textContent=set;
       const list=document.createElement('div'); list.className='list advlist';
-      names.forEach(nm=>list.append(row(byLabel.get(nm),true)));
+      names.forEach(nm=>list.append(row(nm,true)));
       panel.append(sh,list);
     }
   };
