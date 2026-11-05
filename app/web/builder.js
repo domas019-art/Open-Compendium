@@ -184,46 +184,37 @@ const Builder={
   // the character's campaign decides which books may be used
   bookOk(elm){
     const c=this.ch.campaign; if(!c || !c.books) return true;
-    const src=sourcesOf(elm).filter(x=>!isAdventure(x)); if(!src.length) return true;     // adventures never hide anything
+    const src=sourcesOf(elm); if(!src.length) return true;
     if(!this._en || this._enFor!==c.books){ this._en=new Set(c.books); this._enFor=c.books; }
     return src.some(x=>this._en.has(x));
   },
-  // the book list in use: the open character's, or (with none open) the one new characters start with
-  camp(){ return this.ch ? this.ch.campaign : (this._defCamp ||= lastCampaign()); },
+  // the book list in use: the open character's, or (with none open) the placeholder whose list new characters start with
+  camp(){ return this.ch.campaign; },
   saveCamp(){
-    const c=this.camp();
-    try{ localStorage.setItem(CAMPKEY,JSON.stringify(c)); }catch(e){}
-    if(this.ch){ this._defCamp=null; this.changed(); }
+    try{ localStorage.setItem(CAMPKEY,JSON.stringify(this.ch.campaign)); }catch(e){}
+    this.changed();
     if($('#campDlg').open) $('#campCount').textContent=this.campaignLine();
     updateBuilderBooksBtn();
   },
   setCampaign(c){
-    const v={name:c.name||'Campaign', books:c.books?[...c.books]:null, adventures:[...(c.adventures||[])]};
-    if(this.ch) this.ch.campaign=v; else this._defCamp=v;
+    this.ch.campaign={name:c.name||'Campaign', books:c.books?[...c.books]:null};
     this.saveCamp();
   },
   campaignLine(){
-    const c=this.camp()||{}, all=builderBooks().length;
+    const c=this.ch.campaign||{}, all=builderBooks().length;
     return `${c.name||'All books'} · ${c.books? c.books.filter(b=>builderBooks().includes(b)).length : all} of ${all} books`;
   },
   openCampaign(){
-    if(!this.ch) this._defCamp=lastCampaign();
-    const dlg=$('#campDlg'), c=this.camp();
-    $('#campWho').textContent = this.ch && !this.none ? `Books for ${this.ch.name||'this character'}` : 'No character open: new characters start with these books';
-    const name=$('#campName'); name.value=c.name||''; name.oninput=()=>{ this.camp().name=name.value; this.saveCamp(); };
+    const dlg=$('#campDlg'), c=this.ch.campaign;
+    $('#campWho').textContent = !this.none ? `Books for ${this.ch.name||'this character'}` : 'No character open: new characters start with these books';
+    const name=$('#campName'); name.value=c.name||''; name.oninput=()=>{ this.ch.campaign.name=name.value; this.saveCamp(); };
     this.renderCampaignBooks();
     dlg.showModal();
   },
   renderCampaignBooks(){
     const box=$('#campBody'), all=builderBooks();
-    const advs=builderAdventures(), advOn=new Set((this.camp().adventures||[]).map(advKey));
-    const enabled=new Set(this.camp().books||all);
-    const labels=new Map();
-    const paint=()=>{ const need=new Set(); advs.filter(a=>advOn.has(a)).forEach(a=>advNeeds(a).forEach(n=>need.add(n)));
-      for(const [b,l] of labels) l.classList.toggle('needed', need.has(b) && !enabled.has(b)); };
-    const commit=()=>{ const c=this.camp(); c.books=all.filter(b=>enabled.has(b)); if(c.books.length===all.length) c.books=null; c.adventures=advs.filter(a=>advOn.has(a)); paint(); this.saveCamp(); };
-    const setAdv=(a,on)=>{ on?advOn.add(a):advOn.delete(a); boxes.get(a).checked=on;
-      if(on) advNeeds(a).forEach(n=>{ if(boxes.has(n)){ enabled.add(n); boxes.get(n).checked=true; } }); commit(); };
+    const enabled=new Set(this.ch.campaign.books||all);
+    const commit=()=>{ this.ch.campaign.books=all.filter(b=>enabled.has(b)); if(this.ch.campaign.books.length===all.length) this.ch.campaign.books=null; this.saveCamp(); };
     const mags=all.filter(isMagName).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
     const mains=all.filter(b=>!isMagName(b)).sort((a,b)=>stripThe(a).localeCompare(stripThe(b),undefined,{sensitivity:'base',numeric:true}));
     const boxes=new Map(), items=[];
@@ -238,29 +229,15 @@ const Builder={
       for(const b of list){
         const cb=el('input',{type:'checkbox',checked:enabled.has(b)}); boxes.set(b,cb);
         cb.onchange=()=>{ cb.checked?enabled.add(b):enabled.delete(b); commit(); };
-        const l=el('label',{title:b},cb,el('span',{text:b})); grid.append(l); items.push([l,b.toLowerCase()]); labels.set(b,l);
+        const l=el('label',{title:b},cb,el('span',{text:b})); grid.append(l); items.push([l,b.toLowerCase()]);
       }
       box.append(el('div',{class:'ghead'},el('strong',{text:title}),btn('Select all',()=>setAll(list,true)),btn('Select none',()=>setAll(list,false))), grid);
     }
-    if(advs.length){
-      box.append(el('div',{class:'ghead'},el('strong',{text:'Adventures'}),btn('Select none',()=>advs.forEach(a=>setAdv(a,false)))),
-        el('p',{class:'muted small',text:'Adventures never limit what a character can take: their items stay available either way. Ticking one also ticks the books it needs; a needed book that is unticked shows in red.'}));
-      for(const [set,names] of advGroups(advs)){
-        const grid=el('div',{class:'list advlist'});
-        for(const a of names){
-          const cb=el('input',{type:'checkbox',checked:advOn.has(a)}); boxes.set(a,cb);
-          cb.onchange=()=>setAdv(a,cb.checked);
-          const t=advTitle(a), l=el('label',{title:t},cb,el('span',{text:t})); grid.append(l); items.push([l,(t+' '+a).toLowerCase()]);
-        }
-        box.append(el('div',{class:'gsub',text:set}), grid);
-      }
-    }
-    paint();
     $('#campCount').textContent=this.campaignLine();
   },
   exportCampaign(){
-    const c=this.camp();
-    const blob=new Blob([JSON.stringify({app:'Open Compendium',type:'campaign',version:1,name:c.name||'Campaign',books:c.books,adventures:c.adventures||[]},null,1)],{type:'application/json'});
+    const c=this.ch.campaign;
+    const blob=new Blob([JSON.stringify({app:'Open Compendium',type:'campaign',version:1,name:c.name||'Campaign',books:c.books},null,1)],{type:'application/json'});
     const a=el('a',{href:URL.createObjectURL(blob),download:(c.name||'campaign').replace(/[\\/:*?"<>|]+/g,'_')+'.campaign.json'});
     document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   },
@@ -268,7 +245,7 @@ const Builder={
     try{
       const o=JSON.parse(await file.text());
       if(o.type!=='campaign') throw new Error();
-      this.setCampaign({name:o.name, books:Array.isArray(o.books)?o.books:null, adventures:Array.isArray(o.adventures)?o.adventures:[]});
+      this.setCampaign({name:o.name, books:Array.isArray(o.books)?o.books:null});
       if($('#campDlg').open) this.openCampaign();
     }catch(e){ tell('That file is not an Open Compendium campaign file.'); }
   },
@@ -1370,7 +1347,7 @@ function compendiumRef(e){
 
 /* ---------- campaign helpers ---------- */
 const CAMPKEY='open-compendium-campaign';
-function lastCampaign(){ try{ const c=JSON.parse(localStorage.getItem(CAMPKEY)||'null'); if(c && typeof c==='object') return {name:c.name||'Campaign', books:Array.isArray(c.books)?c.books:null, adventures:Array.isArray(c.adventures)?c.adventures:[], inherent:!!c.inherent}; }catch(e){} return {name:'All books', books:null, adventures:[]}; }
+function lastCampaign(){ try{ const c=JSON.parse(localStorage.getItem(CAMPKEY)||'null'); if(c && typeof c==='object') return {name:c.name||'Campaign', books:Array.isArray(c.books)?c.books:null, inherent:!!c.inherent}; }catch(e){} return {name:'All books', books:null}; }
 function sourcesOf(e){ return (e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core'); }
 let _builderBooks=null;
 function builderBooks(){
@@ -1378,17 +1355,14 @@ function builderBooks(){
   const set=new Set();
   for(const t of ['Race','Class','Feat','Power','Background','Theme','Deity','Build','Racial Trait','Class Feature','Paragon Path','Epic Destiny','Language','Skill Training','Magic Item','Armor','Weapon','Gear','Superior Implement','Ritual'])
     for(const id of RULES.db.byType[t]||[]) sourcesOf(RULES.db.els[id]).forEach(s=>set.add(s));
-  const every=[...set];
-  _builderBooks={db:RULES.db, list:every.filter(b=>!isAdventure(b)), advs:ADVENTURE_LIST};      // every known adventure, as in the compendium
-  return _builderBooks.list;
+  _builderBooks={db:RULES.db, list:[...set]}; return _builderBooks.list;
 }
-function builderAdventures(){ builderBooks(); return _builderBooks.advs; }
 const isMagName=n=>/^(Dragon|Dungeon)( Magazine)? (\d+|Annual)/i.test(n);
 
 $('#campIn').onchange=e=>{ const f=e.target.files[0]; if(f) Builder.importCampaign(f); e.target.value=''; };
 $('#campDone').onclick=()=>$('#campDlg').close();
 // the header's Books button: the compendium's own list there, this campaign list on the builder tab
-function updateBuilderBooksBtn(){ if(S.tab!=='builder' || !RULES.db) return; const all=builderBooks(), c=Builder.camp(); const b=$('#booksBtn'); b.style.display=all.length?'':'none'; b.textContent=`Books ${c.books?c.books.filter(x=>all.includes(x)).length:all.length}/${all.length}`+advNote((c.adventures||[]).filter(x=>builderAdventures().includes(x)).length); b.title='The books characters may use (the character\'s campaign)'; }
+function updateBuilderBooksBtn(){ if(S.tab!=='builder' || !RULES.db) return; const all=builderBooks(), c=Builder.ch.campaign; const b=$('#booksBtn'); b.style.display=all.length?'':'none'; b.textContent=`Books ${c.books?c.books.filter(x=>all.includes(x)).length:all.length}/${all.length}`; b.title='The books characters may use (the character\'s campaign)'; }
 $('#campSave').onclick=()=>Builder.exportCampaign();
 $('#campLoad').onclick=()=>$('#campIn').click();
 $('#charIn').onchange=e=>{ const f=e.target.files[0]; if(f) Builder.importFile(f); e.target.value=''; };

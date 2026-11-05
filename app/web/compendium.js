@@ -1,17 +1,17 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.67';
+const APP_VERSION = '0.99.68';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
 const S = {cat:null, q:'', full:false, filters:{}, sort:{col:'Name',dir:1}, limit:300, sel:null,
-           lowCache:{}, meta:{}, terms:null, hidden:new Set(), books:[], advOn:new Set()};
+           lowCache:{}, meta:{}, terms:null, hidden:new Set(), books:[]};
 
 /* ---------- settings that survive restarts ---------- */
 const SETKEY = 'open-compendium-settings';
 function loadSettings(){ try{ const o=JSON.parse(localStorage.getItem(SETKEY)||'{}');
-  if(o.sort && o.sort.col) S.sort=o.sort; if(Array.isArray(o.hiddenBooks)) S.hidden=new Set(o.hiddenBooks); if(Array.isArray(o.adventures)) S.advOn=new Set(o.adventures); }catch(e){} }
-function saveSettings(){ try{ localStorage.setItem(SETKEY, JSON.stringify({sort:S.sort, hiddenBooks:[...S.hidden], adventures:[...S.advOn]})); }catch(e){} }
+  if(o.sort && o.sort.col) S.sort=o.sort; if(Array.isArray(o.hiddenBooks)) S.hidden=new Set(o.hiddenBooks); }catch(e){} }
+function saveSettings(){ try{ localStorage.setItem(SETKEY, JSON.stringify({sort:S.sort, hiddenBooks:[...S.hidden]})); }catch(e){} }
 loadSettings();
 
 /* ---------- reading the library files (they are parsed, never executed) ---------- */
@@ -211,18 +211,7 @@ function startNum(v){ const m=NUM_RE.exec(String(v)); return m ? parseFloat(m[0]
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const V = cat => views[cat];
 const where = id => S.cat===ALL ? views[ALL].ref[id] : [S.cat,id];     // list id -> [category, entry id]
-// a row shows when one of its books is ticked. Adventures: an adventure-only monster or NPC shows when its adventure is ticked;
-// adventure tags on anything else (items, traps...) never hide it.
-function bookOk(v,cat){
-  const b=bookTokens(v); if(!b.length) return true;
-  const strict=ADV_STRICT.has(cat); let any=false;
-  for(const x of b){
-    const lb=bookLabel(x);
-    if(isAdventure(lb)){ if(strict && S.advOn.has(advKey(lb))) return true; continue; }
-    any=true; if(!S.hidden.has(x)) return true;
-  }
-  return !any && !strict;
-}
+function bookOk(v){ if(!S.hidden.size) return true; const b=bookTokens(v); return !b.length || b.some(x=>!S.hidden.has(x)); }
 
 function prepare(){
   for(const c of Object.values(lib)){
@@ -244,7 +233,7 @@ function prepare(){
   views={};
   const all={cols:['ID','Name','Category','Level','SourceBook'], rows:[], hay:{}, ref:{}};
   for(const cat of Object.keys(lib).sort()){
-    const c=lib[cat]; views[cat]=c; c.key=cat;
+    const c=lib[cat]; views[cat]=c;
     const ni=nameCol(c), li=c.cols.indexOf('Level'), sc=srcCol(c), lbl=catLabel(cat);
     for(const r of c.rows){
       const uid=cat+':'+r[0];
@@ -298,8 +287,7 @@ function sortSpec(c){
   return {ci: has ? c.cols.indexOf(S.sort.col) : nameCol(c), dir: has ? S.sort.dir : 1, col: has ? S.sort.col : c.cols[nameCol(c)]};
 }
 
-const rowCat = (c,r) => c.ref ? c.ref[r[0]][0] : c.key;
-function activeCount(c){ const sc=srcCol(c); if(sc<0) return c.rows.length; let n=0; for(const r of c.rows) if(bookOk(r[sc],rowCat(c,r))) n++; return n; }
+function activeCount(c){ const sc=srcCol(c); if(sc<0 || !S.hidden.size) return c.rows.length; let n=0; for(const r of c.rows) if(bookOk(r[sc])) n++; return n; }
 
 function visibleRows(){
   const c=V(S.cat), mt=meta(S.cat), sc=srcCol(c);
@@ -307,7 +295,7 @@ function visibleRows(){
   const low=S.full ? lowIndex(S.cat) : null;
   const fs=Object.entries(S.filters).filter(([,v])=>v!=='' && v!=null);
   const rows=c.rows.filter(r=>{
-    if(sc>=0 && !bookOk(r[sc],rowCat(c,r))) return false;
+    if(sc>=0 && !bookOk(r[sc])) return false;
     for(const [i,v] of fs){
       if(typeof v==='object'){ const n=startNum(r[i]); if(n===null) return false; if(v.min!=null && n<v.min) return false; if(v.max!=null && n>v.max) return false; }
       else if(mt[i].numeric){ if(startNum(r[i])!==Number(v)) return false; }
@@ -342,116 +330,43 @@ function bookLabel(code){
 }
 const stripThe = t => t.replace(/^the\s+/i,'');
 
-/* ---------- adventures ----------
-   Adventures sit in their own group in both book lists, unticked unless chosen, grouped by set and in play order.
-   Monsters and NPCs that appear only in an adventure show when it is ticked (like any book's);
-   its items, traps and everything else stay usable either way.
-   Ticking one ticks the books it needs; a needed book left unticked shows its title in red.
-   lv: levels as the adventure itself states them (empty when it doesn't say);
-   needs: only what the adventure itself says it needs (empty until checked); show: the name shown, if not the source name. */
-const ADVENTURE_SETS = [
-  ['H, P and E series', [
-    ["H1 Keep on the Shadowfell",{lv:'1–3'}], ["H2 Thunderspire Labyrinth",{lv:'4–6',needs:['PHB','DMG','MM']}], ["H3 Pyramid of Shadows",{lv:'7–10',needs:['PHB','DMG','MM']}],
-    ["P1 King of the Trollhaunt Warrens",{lv:'11–13',needs:['PHB','DMG','MM']}], ["P2 Demon Queen Enclave",{lv:'14–17',needs:['PHB','DMG','MM']}], ["P3 Assault on Nightwyrm Fortress",{lv:'17–20',needs:['PHB','DMG','MM']}],
-    ["E1 Death's Reach",{lv:'21–23',needs:['PHB','DMG','MM']}], ["E2 Kingdom of the Ghouls",{lv:'24–26',needs:['PHB','DMG','MM']}], ["E3 Prince of Undeath",{lv:'27–30',needs:['PHB','DMG','MM']}]]],
-  ['Scales of War', [
-    ["Rescue at Rivenroar",{lv:'1'}], ["Siege of Bordrin's Watch",{lv:'3'}], ["The Shadow Rift of Umbraforge",{lv:'4'}], ["The Lost Mines of Karak",{lv:'6'}],
-    ["Den of the Destroyer",{lv:'7'}], ["The Temple Between",{lv:'9'}], ["Fist of Mourning",{lv:'10'}], ["Beyond the Mottled Tower",{lv:'11'}]]],
-  ['HS series', [["HS1 The Slaying Stone",{lv:'1'}], ["HS2 Orcs of Stonefang Pass",{lv:'5',needs:['PHB','DMG','MM']}]]],
-  ['D&D Encounters seasons', [
-    ["Beyond the Crystal Cave",{lv:'1–3',show:'Season 7: Beyond the Crystal Cave'}], ["Web of the Spider Queen",{lv:'1–3',show:'Season 9: Web of the Spider Queen'}],
-    ["Council of Spiders",{lv:'1–3',show:'Season 10: Council of Spiders'}]]],
-  ['Other adventures', [
-    ["FR1 Scepter Tower of Spellgard",{lv:'2–4',needs:['PHB','DMG','MM']}], ["Marauders of the Dune Sea",{lv:'2',needs:['PHB','DMG']}], ["Seekers of the Ashen Crown",{lv:'2–5'}],
-    ["Halls of Undermountain",{lv:'1–5'}], ["Hammerfast",{lv:'1–10'}], ["Madness at Gardmore Abbey",{lv:'6–8'}], ["Tomb of Horrors",{lv:'10–22',needs:['PHB','DMG','MM']}],
-    ["Revenge of the Giants",{lv:'12–18'}], ["Vor Rukoth",{}], ["Vor Rukoth: An Ancient Ruins Adventure Site",{alias:'Vor Rukoth'}]]],
-  ['RPGA and DM Rewards', [
-    ["RPGA Treasure of Talon Pass",{lv:'2'}], ["RPGA Khyber's Harvest",{lv:'2'}], ["RPGA Village of Hommlet",{lv:'4–5'}], ["RPGA Tomb of Horrors",{lv:'9'}]]],
-  ['Living Forgotten Realms', [
-    ["ADCP3−2 From Dawn Till Dusk",{lv:'1–20'}], ["ADCP4-2 The Lost City of Suldolphor",{lv:'1–20'}], ["ELTU3−3 The Way of All Flesh",{}], ["EPIC 3-1",{}], ["NETH3−3 Seek and Destroy",{}]]]
-];
-const ADVENTURES = {};
-ADVENTURE_SETS.forEach(([set,list],si)=>list.forEach(([name,o],i)=>{ ADVENTURES[name]={...o, set, ord:si*1000+i}; }));
-const isAdventure = name => Object.prototype.hasOwnProperty.call(ADVENTURES,name);
-// a second spelling of the same adventure counts as that adventure
-const advKey = name => (ADVENTURES[name]||{}).alias || name;
-// every adventure shown in the book lists (the same list in the compendium and the builder), in set order
-const ADVENTURE_LIST = Object.keys(ADVENTURES).filter(n=>!ADVENTURES[n].alias).sort((a,b)=>ADVENTURES[a].ord-ADVENTURES[b].ord);
-// what an adventure needs, as full book names (the builder's names); bookLabel turns compendium codes into those
-const advNeeds = name => ((ADVENTURES[name]||{}).needs||[]).map(bookLabel);
-// the name shown in the book lists: its set name plus its levels
-function advTitle(name){ const a=ADVENTURES[name]||{}; const lv=a.lv ? ` (level${/[–-]/.test(a.lv)?'s':''} ${a.lv})` : ''; return (a.show||name)+lv; }
-const advSort = (a,b) => ADVENTURES[a].ord-ADVENTURES[b].ord;
-// the adventures of a list, split into their sets, in play order: [[set name, [names]], ...]
-function advGroups(names){ const m=new Map(); [...names].sort(advSort).forEach(n=>{ const s=ADVENTURES[n].set; if(!m.has(s)) m.set(s,[]); m.get(s).push(n); }); return [...m]; }
-// categories where an adventure's own entries hide with it (its monsters and NPCs); everything else stays usable
-const ADV_STRICT = new Set(['monster']);
-
 function buildBooks(){
   const set=new Set();
   for(const c of Object.values(lib)){ const sc=srcCol(c); if(sc<0) continue; c.rows.forEach(r=>bookTokens(r[sc]).forEach(b=>set.add(b))); }
-  // adventures go by name (every known one is listed, with or without entries here); older settings stored codes
-  const every=[...set], advs=ADVENTURE_LIST;
-  S.advOn=new Set([...S.advOn].map(x=>advKey(bookLabel(x))).filter(isAdventure));
-  const all=every.filter(b=>!isAdventure(bookLabel(b))); S.books=all; S.advs=advs;
+  const all=[...set]; S.books=all;
   const mags=all.filter(isMagazine).sort((a,b)=>bookLabel(a).localeCompare(bookLabel(b),undefined,{numeric:true}));
   const mains=all.filter(b=>!isMagazine(b)).sort((a,b)=>stripThe(bookLabel(a)).localeCompare(stripThe(bookLabel(b)),undefined,{sensitivity:'base',numeric:true}));
   const panel=$('#bookPanel'); panel.replaceChildren();
-  $('#booksBtn').style.display = every.length ? '' : 'none';
-  const boxes=new Map(), labels=new Map(), items=[];
-  const codeOf=new Map(all.map(b=>[bookLabel(b),b]));
-  // a book that a ticked adventure needs, but is itself unticked, shows in red
-  const paint=()=>{ const need=new Set(); S.advs.filter(a=>S.advOn.has(a)).forEach(a=>advNeeds(bookLabel(a)).forEach(n=>{ const c=codeOf.get(n); if(c) need.add(c); }));
-    for(const [b,l] of labels) l.classList.toggle('needed', need.has(b) && S.hidden.has(b)); };
-  const setCodes=(codes,on)=>{ codes.forEach(b=>{ on ? S.hidden.delete(b) : S.hidden.add(b); boxes.get(b).checked=on; }); paint(); booksChanged(); };
-  const setAdv=(a,on)=>{ on ? S.advOn.add(a) : S.advOn.delete(a); boxes.get(a).checked=on;
-    if(on) advNeeds(bookLabel(a)).forEach(n=>{ const c=codeOf.get(n); if(c){ S.hidden.delete(c); boxes.get(c).checked=true; } });
-    paint(); booksChanged(); };
+  $('#booksBtn').style.display = all.length ? '' : 'none';
+  const boxes=new Map(), items=[];
+  const setCodes=(codes,on)=>{ codes.forEach(b=>{ on ? S.hidden.delete(b) : S.hidden.add(b); boxes.get(b).checked=on; }); booksChanged(); };
   const btn=(t,fn)=>{ const b=document.createElement('button'); b.className='btn'; b.type='button'; b.textContent=t; b.onclick=fn; return b; };
   const top=document.createElement('div'); top.className='bar';
   const find=document.createElement('input'); find.type='search'; find.placeholder='Find a book…';
   find.oninput=()=>{ const q=find.value.toLowerCase().trim(); items.forEach(([el,txt])=>el.style.display = txt.includes(q) ? '' : 'none'); };
   top.append(find, btn('Select everything',()=>setCodes(all,true)), btn('Select nothing',()=>setCodes(all,false)));
   panel.append(top);
-  const row=(b,adv)=>{
-    const l=document.createElement('label'), x=document.createElement('input');
-    x.type='checkbox'; x.checked=adv ? S.advOn.has(b) : !S.hidden.has(b);
-    x.onchange=adv ? ()=>setAdv(b,x.checked) : ()=>{ x.checked ? S.hidden.delete(b) : S.hidden.add(b); paint(); booksChanged(); };
-    boxes.set(b,x); if(!adv) labels.set(b,l);
-    const name=adv ? advTitle(bookLabel(b)) : bookLabel(b), sp=document.createElement('span'); sp.textContent=name; l.title=name;
-    l.append(x,sp); items.push([l,(name+' '+bookLabel(b)+' '+b).toLowerCase()]); return l;
-  };
   const group=(title,codes)=>{
     if(!codes.length) return;
     const h=document.createElement('div'); h.className='ghead';
     const t=document.createElement('strong'); t.textContent=title;
     h.append(t, btn('Select all',()=>setCodes(codes,true)), btn('Select none',()=>setCodes(codes,false)));
     const list=document.createElement('div'); list.className='list';
-    for(const b of codes) list.append(row(b,false));
-    panel.append(h,list);
-  };
-  const advGroup=codes=>{
-    if(!codes.length) return;
-    const h=document.createElement('div'); h.className='ghead';
-    const t=document.createElement('strong'); t.textContent='Adventures';
-    h.append(t, btn('Select none',()=>codes.forEach(a=>setAdv(a,false))));
-    const n=document.createElement('p'); n.className='muted small'; n.textContent='A monster or NPC found only in an adventure shows when that adventure is ticked. Its items and traps are always listed. Ticking an adventure also ticks the books it needs; a needed book that is unticked shows in red.';
-    panel.append(h,n);
-    for(const [set,names] of advGroups(codes)){
-      const sh=document.createElement('div'); sh.className='gsub'; sh.textContent=set;
-      const list=document.createElement('div'); list.className='list advlist';
-      names.forEach(nm=>list.append(row(nm,true)));
-      panel.append(sh,list);
+    for(const b of codes){
+      const l=document.createElement('label'), x=document.createElement('input');
+      x.type='checkbox'; x.checked=!S.hidden.has(b);
+      x.onchange=()=>{ x.checked ? S.hidden.delete(b) : S.hidden.add(b); booksChanged(); };
+      boxes.set(b,x);
+      const name=bookLabel(b), sp=document.createElement('span'); sp.textContent=name; l.title=name;
+      l.append(x,sp); list.append(l); items.push([l,(name+' '+b).toLowerCase()]);
     }
+    panel.append(h,list);
   };
   group('Books',mains);
   group('Magazines',mags);
-  advGroup(advs);
-  paint();
   updateBooksBtn();
 }
-const advNote = n => n ? ` · ${n} adventure${n>1?'s':''}` : '';
-function updateBooksBtn(){ const on=S.books.filter(b=>!S.hidden.has(b)).length; $('#booksBtn').textContent=`Books ${on}/${S.books.length}`+advNote((S.advs||[]).filter(a=>S.advOn.has(a)).length); }
+function updateBooksBtn(){ const on=S.books.filter(b=>!S.hidden.has(b)).length; $('#booksBtn').textContent=`Books ${on}/${S.books.length}`; }
 function updateCounts(){
   document.querySelectorAll('#cats button').forEach(b=>{ const n=activeCount(V(b.dataset.cat));
     b.querySelector('small').textContent=n; b.classList.toggle('zero',n===0); });

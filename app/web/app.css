@@ -697,8 +697,3 @@ dialog.askdlg p{margin:0}
 
 /* a choice that belongs to the pick above it (a feat's own choice) sits indented under it */
 .slot.subslot{margin-left:22px;padding-left:10px;border-left:3px solid var(--line)}
-
-/* a book a ticked adventure needs, left unticked */
-#bookPanel label.needed span,.bookchooser label.needed span{color:#b4462d;font-weight:600}
-#bookPanel .gsub,.bookchooser .gsub{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 4px}
-#bookPanel .list.advlist,.bookchooser .list.advlist{column-width:380px}
