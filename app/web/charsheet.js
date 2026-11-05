@@ -397,9 +397,10 @@ Object.assign(Builder,{
     const st=this.st, P=this.play();
     const pets=this.pets();
     // the companions' attacks get their own column: powers that attack with the beast, their cards' attacks and auras
-    const beastPower=p=>/beast'?s attack bonus/i.test(sp(p,'Attack'));
+    // (the animal master's distracting attack is made with the animal minion: it is shown with the companions too)
+    const beastPower=p=>/beast'?s attack bonus/i.test(sp(p,'Attack')) || /\banimal minion\b/i.test(sp(p,'Requirement'));
     const all=this.sheetPowers().filter(p=>!(pets.length && beastPower(p))), util=p=>/utility/i.test(sp(p,'Power Type')+' '+sp(p,'Display'));
-    const petList=pets.length ? [...this.sheetPowers().filter(beastPower), ...pets.flatMap(x=>[x.attack,...(x.auras||[])]).filter(Boolean)] : [];
+    const petList=pets.length ? [...this.sheetPowers().filter(beastPower), ...pets.flatMap(x=>[x.attack,...(x.acts||[]),...(x.auras||[])]).filter(Boolean)] : [];
     const cols=[['At-will',p=>/at-will/i.test(sp(p,'Power Usage'))&&!util(p),'u0'],['Encounter',p=>/encounter/i.test(sp(p,'Power Usage'))&&!util(p),'u1'],
       ['Daily',p=>/daily/i.test(sp(p,'Power Usage'))&&!util(p),'u2'],['Utility',util,'u3']];
     const seen=new Set();
@@ -700,6 +701,10 @@ Object.assign(Builder,{
           calc:{rows:[{weapon:name, atk, def:def==='AC'?'AC':def, dmg, dice:die, diceNote:'(the card\'s dice)', atkParts:[[L,'your level'],[plus,'from the card'],...(ab?[[ab,'companion bonuses']]:[])], dmgParts:flat?[[flat,'one-half your level']]:[]}]}};
       }
       // its auras and traits ("Alert Companion (Aura 1): ...")
+      // its other actions ("Nimble Fingers: (Move Action; At-Will) ... the master can take a standard action to command it")
+      pet.acts=Object.entries(spec).filter(([k,v])=>k!==ak && /^\s*\((?:Move|Minor|Standard|Free|No)\s+Action/i.test(v||'') && !/\(aura \d+\)/i.test(v)).map(([k,v])=>{
+        v=String(v).trim(); const m=/^\(([^)]*)\)\s*([\s\S]*)$/.exec(v), bits=(m?m[1]:'').split(/\s*;\s*/);
+        return {id:'act:'+p.id+':'+k, virtual:true, pet, name:k, type:'Power', spec:{'Power Usage':bits.find(b=>/at-will|encounter|daily/i.test(b))||'At-Will','Action Type':bits.find(b=>/action/i.test(b))||''}, text:m?m[2]:v}; });
       pet.auras=Object.entries(spec).filter(([k,v])=>/\(aura \d+\)/i.test(v) || /aura/i.test(k)).map(([k,v])=>{ v=String(v).trim(); const m=/^(\([^)]*\))\s*([\s\S]*)$/.exec(v);
         return {id:'aura:'+p.id+':'+k, virtual:true, aura:true, pet, name:m?`${k} ${m[1]}`:k, type:'Power', spec:{'Power Usage':'','Action Type':'Aura'}, text:m?m[2]:v}; });
       out.push(pet);
@@ -727,13 +732,14 @@ Object.assign(Builder,{
     const spec=pet.card ? modSpec(pet.card,st) : {}, txt=Object.values(spec).join('\n'), skillsTxt=String(spec['Skills']||'');
     // a card that prints its skills ("Athletics +2, Stealth +9") has only those; otherwise (fey beasts) every skill is
     // one-half your level (its level is yours) + its ability modifier
-    const listed=/[A-Za-z]\s*\+\s*\d/.test(skillsTxt), sc=pet.sc||{};
+    const listed=/[A-Za-z]\s*\+\s*\d/.test(skillsTxt), sc=pet.sc||{}, cardHalf=Math.floor((+(/\bLevel (\d+)/i.exec(String(spec['Animal Companion']||''))||[])[1]||0)/2);
     const extra=k=>cardPetBonus() ? st.stat.parts('BEAST.'+k+' misc').filter(x=>x.value).map(x=>[x.value,(x.type?x.type+' bonus - ':'')+(db.els[x.src]?.name||'')]) : [];
     for(const k of SKILLS){
       let m=new RegExp('\\b'+k+'\\s*\\+\\s*(\\d+)','i').exec(skillsTxt), parts;
       if(m) parts=[[+m[1],'from its card']];
       else if((m=new RegExp('\\b'+k+'\\s*\\(?equal to yours(?:\\s*\\+\\s*(\\d+))?','i').exec(txt))) parts=[[this.sv(k),'your '+k],...(m[1]?[[+m[1],'from its card']]:[])];
-      else if(!listed && Object.keys(sc).length){ const a=this.skillAbility(k)||'Wisdom', s=sc[a]??10; parts=[[half,'one-half your level'],[Math.floor((s-10)/2),a+' modifier ('+s+')']]; }
+      else if((m=new RegExp('\\b'+k+'\\s*:?\\s*([+-]\\s*\\d+)','i').exec(String(spec['Statistics']||'')))) parts=[[+m[1].replace(/\s/g,''),'from its card']];
+      else if(Object.keys(sc).length){ const a=this.skillAbility(k)||'Wisdom', s=sc[a]??10, h=listed?cardHalf:half; parts=[...(h?[[h,listed?'one-half its level':'one-half your level']]:[]),[Math.floor((s-10)/2),a+' modifier ('+s+')']]; }
       else continue;
       parts=[...parts,...extra(k)].filter(([v])=>v);
       out.push([k, parts.reduce((t,[v])=>t+v,0), !!(m && listed), parts]);

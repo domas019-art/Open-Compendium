@@ -303,10 +303,10 @@ function standardBlock(ci, L, kind, o, st){
   const box=el('div',{class:'compsheet'}, head,
     line('Ability Scores', o.abil.map(([a,v])=>a+': '+v).join(', ')),
     line('Size', o.size), line('Speed', o.speed), line('Vision', o.vision),
-    line('Defenses', o.def), line('Hit Points', o.hp), line('Healing Surge Value', o.surge),
-    line('Attack Bonus', o.atk), line('Damage', o.dmg),
-    el('div',{class:'prel'}, el('b',{text:'Melee Basic Attack: '}), o.basic),
-    ...(o.powers||[]).map(named), line('Trained Skills', o.skills||''),
+    line('Defenses', o.def), line('Hit Points', o.hp), o.surge!=null ? line('Healing Surge Value', o.surge) : null,
+    o.atk!=null ? line('Attack Bonus', o.atk) : null, o.dmg!=null ? line('Damage', o.dmg) : null,
+    o.basic!=null ? el('div',{class:'prel'}, el('b',{text:'Melee Basic Attack: '}), o.basic) : line('Attacks','none of its own'),
+    ...(o.powers||[]).map(named), line(o.bonus!==undefined?'Skills':'Trained Skills', o.skills||''),
     ...extras((k,v)=>v ? line(k,v) : null));
   box._retitle=title; return box;
 }
@@ -347,9 +347,9 @@ function cardPetSheet(p, cname, ci, st){
   for(const m of all.matchAll(/\b(Str|Con|Dex|Int|Wis|Cha)\b:?\s*(\d+)/g)) sc[AB[m[1]]] ??= +m[2];
   const stats=String(spec['Statistics']||spec['Summoned Creature']||'');
   const size=(/\b(Tiny|Small|Medium|Large|Huge|Gargantuan)\b/.exec(stats)||[])[1]||'';
-  let speed=String(spec['Speed']||(/Speed\s+([^\n]*)/.exec(stats)||[])[1]||'').trim().replace(/^land\s+/i,'').replace(/\s+,/g,',');
+  let speed=String(spec['Speed']||(/Speed:?\s+([^\n]*?)(?:\s*Initiative\b|$)/m.exec(stats)||[])[1]||'').trim().replace(/,\s*$/,'').replace(/\b(climb|fly|swim|burrow):\s*/gi,'$1 ').replace(/^land\s+/i,'').replace(/\s+,/g,',');
   speed=speedUp(speed);
-  const vision=(/(low-light|darkvision|blindsight\s*\d*|tremorsense\s*\d*)/i.exec(stats+' '+(spec['Senses']||''))||[])[1]?.toLowerCase()||'low-light';
+  const vision=(/(low-light|darkvision|blindsight\s*\d*|tremorsense\s*\d*)/i.exec(stats+' '+(spec['Senses']||''))||[])[1]?.toLowerCase()||'normal';
   let def=String(spec['Defenses']||'');
   if(/add your level/i.test(def)) def=def.replace(/\(add your level to each defense\)\s*/i,'').replace(/\b(AC|Fortitude|Reflex|Will)\s+(\d+)/g,(m,a,n)=>a+' '+(+n+L));
   def=bump(def.replace(/\s+/g,' ').trim());
@@ -363,12 +363,14 @@ function cardPetSheet(p, cname, ci, st){
   for(const x of hitLines){ const m=/^Level (\d+):\s*(.*?damage)/i.exec(x); if(m && L>=+m[1]) hit=hit.replace(/^.*?damage/i,m[2]); }
   const dmg=(/\d+d\d+/.exec(hit)||[])[0]||'';
   const name=(ak||'Attack').replace(/\s*\(.*\)$/,'');
+  // the skills it prints ("Acrobatics +8"; "Senses Perception +7")
+  const skillLine=[...String(spec['Skills']||'').split('\n')[0].matchAll(/([A-Z][a-z]+)\s*\+\s*(\d+)/g), ...String(stats).matchAll(/(Perception)\s*:?\s*\+\s*(\d+)/g)].filter(m=>+m[2]).map(m=>m[1]+' +'+m[2]);
   const skip=new Set([ak,'Statistics','Summoned Creature','Hit Points','Initiative','Defenses','Perception','Speed','Skills','Ability Scores','Senses','Power Usage','Animal Companion','Display','Level','Class','Short Description','type','Type']);
-  const powers=Object.entries(spec).filter(([k,v])=>k[0]!=='_' && v && !/^ID_/.test(v) && !skip.has(k)).map(([k,v])=>{ v=String(v).trim().replace(/\s*\n\s*/g,' '); const m=/^(\([^)]*\))\s*(.*)$/.exec(v); return m ? `${k} ${m[1]}: ${m[2]}` : k+': '+v; });
+  const powers=Object.entries(spec).filter(([k,v])=>k[0]!=='_' && v && !/^ID_/.test(v) && !skip.has(k)).map(([k,v])=>{ v=String(v).trim().replace(/\s*\n\s*/g,' ').replace(/^See accompanying Encounter Card\.?$/i,'your '+k.toLowerCase()+' power (on the sheet with the companions).'); const m=/^(\([^)]*\))\s*(.*)$/.exec(v); return m ? `${k} ${m[1]}: ${m[2]}` : k+': '+v; });
   return standardBlock(ci, L, cname.replace(/^Trained\s+/,''), {
     abil:ABILITIES.map(a=>[a,sc[a]??10]), size, speed, vision, def, hp,
-    surge:`${Math.floor(hp/4)} (${Math.max(0,bs('Healing Surges'))} surges per day)`,
-    atk, dmg, basic:`${name}; ${atk} vs. AC; ${hit}`, powers, skills:'', bonus:on}, st);
+    surge:/minion/i.test(hpText) ? null : `${Math.floor(hp/4)} (${Math.max(0,bs('Healing Surges'))} surges per day)`,
+    atk:ak?atk:null, dmg:ak?dmg:null, basic:ak?`${name}; ${atk} vs. AC; ${hit}`:null, powers, skills:[...new Set(skillLine)].join(', '), bonus:on}, st);
 }
 function familiarSheet(f, st){
   // a familiar's defenses equal yours, +1 for each familiar feat beyond the first, plus FAMILIAR.* bonuses
