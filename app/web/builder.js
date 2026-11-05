@@ -92,6 +92,7 @@ const Builder={
   fixup(c){ if(typeof c.showAll!=='object' || !c.showAll) c.showAll={}; c.extra ||= {}; c.hb ||= {}; c.picks ||= {};
     c.items ||= []; c.equip ||= {}; if(c.money==null) c.money=10000; c.stored ||= 0; c.rituals ||= []; c.formulas ||= []; c.practices ||= [];
     c.campaign ||= lastCampaign();
+    c.campaign.books=newBookNames(c.campaign.books);
     if(!c.details){ c.details={inherent: c.campaign.inherent!==undefined ? !!c.campaign.inherent : true}; }
     delete c.campaign.inherent;
     return c; },
@@ -197,7 +198,7 @@ const Builder={
     updateBuilderBooksBtn();
   },
   setCampaign(c){
-    this.ch.campaign={name:c.name||'Campaign', books:c.books?[...c.books]:null};
+    this.ch.campaign={name:c.name||'Campaign', books:newBookNames(c.books)};
     this.saveCamp();
   },
   campaignLine(){
@@ -1347,7 +1348,16 @@ function compendiumRef(e){
 
 /* ---------- campaign helpers ---------- */
 const CAMPKEY='open-compendium-campaign';
-function lastCampaign(){ try{ const c=JSON.parse(localStorage.getItem(CAMPKEY)||'null'); if(c && typeof c==='object') return {name:c.name||'Campaign', books:Array.isArray(c.books)?c.books:null, inherent:!!c.inherent}; }catch(e){} return {name:'All books', books:null}; }
+// books renamed in the builder library (0.99.69), so a saved book list keeps finding them
+const RENAMED_BOOKS={"Dungeon Survival Handbook":"Into the Unknown: The Dungeon Survival Handbook",
+  "Player Essentials: Heroes of the Fallen Lands":"Heroes of the Fallen Lands","Player Essentials: Heroes of the Forgotten Kingdoms":"Heroes of the Forgotten Kingdoms",
+  "Player Essentials: Heroes of Shadow":"Heroes of Shadow","Neverwinter Campaign Guide":"Neverwinter Campaign Setting","Player Essentials: Class Compendium":"Class Compendium",
+  "Dragon 427":"Dragon Magazine 427","The Plane Below: Secrets of the Elemental Chaos":"The Plane Below","Open Grave: Secrets of the Undead":"Open Grave",
+  "Thingamajigs of the Barrier Peaks (Dragon Magazine 410)":"Dragon Magazine 410","Dungeon Magazine 405":"Dungeon Magazine 205",
+  "Eberron Campaign Guide":"Eberron Campaign Setting","Dragon Magazine Annual 2009":"Dragon Magazine Annual","EPIC 3-1":"EPIC3-1 The Glorious Hunt",
+  "The Book Of Vile Darkness":"The Book of Vile Darkness"};
+const newBookNames = books => Array.isArray(books) ? [...new Set(books.map(b=>RENAMED_BOOKS[b]||b))] : null;
+function lastCampaign(){ try{ const c=JSON.parse(localStorage.getItem(CAMPKEY)||'null'); if(c && typeof c==='object') return {name:c.name||'Campaign', books:newBookNames(c.books), inherent:!!c.inherent}; }catch(e){} return {name:'All books', books:null}; }
 function sourcesOf(e){ return (e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core'); }
 let _builderBooks=null;
 function builderBooks(){

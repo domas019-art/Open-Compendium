@@ -1,7 +1,7 @@
 {
   "name": "open-compendium",
   "productName": "Open Compendium",
-  "version": "0.99.68",
+  "version": "0.99.69",
   "description": "Offline D&D 4e compendium and character builder",
   "main": "main.js",
   "private": true
