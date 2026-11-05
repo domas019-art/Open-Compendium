@@ -312,6 +312,7 @@ function reqAtom(a,st){
   if(/^heroic tier$/i.test(a)) return st.level<11;
   if(/^paragon tier$/i.test(a)) return st.level>=11 && st.level<21;
   if(/^epic tier$/i.test(a)) return st.level>=21;
+  m=/^(.+?) Skill Training$/i.exec(a); if(m){ const k=SKILLS.find(x=>x.toLowerCase()===m[1].toLowerCase()); if(k) return st.stat(k+' Trained')>0; }   // "Acrobatics Skill Training" (Beast Guidance)
   if(st.granted.has(a) || st.names.has(a.toLowerCase())) return true;
   return st.stat.has(a) && st.stat(a)>0;
 }

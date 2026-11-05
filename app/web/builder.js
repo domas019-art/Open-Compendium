@@ -866,12 +866,16 @@ const Builder={
     // powers: alphabetical inside each class group, like the original
     if(groupFn===powerClassGroup) for(const items of groups.values()) items.sort((a,b)=>a.el.name.localeCompare(b.el.name,undefined,{numeric:true}));
     const names=[...groups.keys()].sort(groupFn===bookGroup ? bookGroupSort : groupFn===sourceGroup ? sourceGroupSort : groupFn===powerClassGroup ? powerGroupSort : groupSort);
+    // feats: the ones your class, build or background suggests, first (as in the original builder); they stay in their own groups too
+    const REC='Recommended for your build';
+    if(slot.type==='Feat'){ const sug=this.suggestedFeats(), rec=opts.filter(o=>sug.has(o.el.id)).sort((a,b)=>a.el.name.localeCompare(b.el.name));
+      if(rec.length){ groups.set(REC,rec); names.unshift(REC); } }
     // small grouped lists start open; big ones (feats, every class's powers) start closed
     const expandAll=!!q || names.length<=1 || (groupFn!==featGroup && opts.length<=150);
     for(const g of names){
       const items=groups.get(g);
       const has=items.some(o=>picks.includes(o.el.id)||o.el.id===P.focus);
-      const isOpen=P.open.has('!'+g) ? false : (expandAll || P.open.has(g) || has);
+      const isOpen=P.open.has('!'+g) ? false : (expandAll || P.open.has(g) || has || g===REC);
       const box=g ? el('div',{class:'pkg'}) : list; if(g) list.append(box);
       if(g){
         box.append(el('div',{class:'pkgroup'+(isOpen?' open':''),dataset:{g},role:'button',tabindex:0,onclick:()=>{
@@ -885,6 +889,15 @@ const Builder={
     if(P.kb){ const k=list.querySelector(P.kb.g!=null ? `.pkgroup[data-g="${CSS.escape(P.kb.g)}"]` : `.pkrow[data-id="${CSS.escape(P.kb.id)}"]`); if(k) k.classList.add('kb'); }
     const f=opts.find(o=>o.el.id===P.focus) || opts.find(o=>picks.includes(o.el.id)) || (!groupFn && opts[0]);
     if(f) this.previewPick(f); else $('#pkPreview').replaceChildren(el('p',{class:'muted',text:'Open a group and pick an entry to read it here.'}));
+  },
+  // feats suggested by what the character has: a build's or class's suggested feats, and "suggest" rules (build suggestions, backgrounds)
+  suggestedFeats(){
+    const out=new Set(), db=RULES.db;
+    for(const e of this.st.granted.values()){
+      for(const id of sp(e,'_SUGGESTED_FEATS').split(',').map(x=>x.trim()).filter(Boolean)) out.add(id);
+      for(const [t,a] of e.rules||[]) if(t==='suggest' && a.type==='Feat' && a.name) out.add(a.name);
+    }
+    return new Set([...out].filter(id=>db.els[id]?.type==='Feat'));
   },
   pickRow(o,slot,picks){
     const on=picks.includes(o.el.id);

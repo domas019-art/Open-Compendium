@@ -232,6 +232,8 @@ Object.assign(Builder,{
     const ups=[]; t=t.replace(/Level (\d+):\s*([^.]*)\.\s*/g,(m,lv,x)=>{ ups.push([+lv,x]); return ''; }).trim();
     t=t.replace(/^you gain the following benefits:?\s*/i,'');
     let parts=/^\s*-/.test(t) ? t.split(/\s*-\s*(?=[A-Z])/) : t.split(/(?<=\.)\s+(?=[A-Z])/);
+    // "a +2 power bonus to your speed when charging and a +2 power bonus to the attack rolls of your charge attacks": two benefits
+    parts=parts.flatMap(x=>{ const m=/^(you gain )(an? \+\d+ .*?) and (an? \+\d+ .*)$/i.exec(x.trim()); return m ? [m[1]+m[2]+'.', m[1]+m[3]] : [x]; });
     parts=parts.map(x=>x.trim()).filter(Boolean).map(x=>x[0].toUpperCase()+x.slice(1)).map(x=>/[.!]$/.test(x)?x:x+'.');
     // "Level 11: The bonus to damage rolls increases to +3": the clause it means gets the new number
     for(const [lv,x] of ups.sort((a,b)=>a[0]-b[0])){
@@ -267,7 +269,9 @@ Object.assign(Builder,{
     const out=[], mod=a=>Math.floor((this.st.stat(a)-10)/2);
     for(const clause of this.activeClauses(p)){
       const bl=/if either you or your target is bloodied|while you are bloodied/i.test(clause);
-      if(this.isConditional(clause) && !bl) continue;
+      // only when charging: speed for the charge's move, attack rolls for the charge attack
+      const chg=/\bwhen (?:you )?charg(?:e|ing)\b|\bcharge attacks?\b/i.test(clause);
+      if(this.isConditional(clause.replace(/\bwhen (?:you )?charg(?:e|ing)\b/i,'')) && !bl) continue;
       let b=/you gain a \+(\d+) (?:(\w+) )?bonus to (?:the )?(.+?)\.?$/i.exec(clause), v, type, what;
       if(b){ v=+b[1]; type=b[2]; what=b[3]; }
       else { b=/you gain an? (?:(\w+) )?bonus to (?:the )?(.+?) equal to your (\w+) modifier(.*)$/i.exec(clause); if(!b) continue;
@@ -277,7 +281,7 @@ Object.assign(Builder,{
       what=what.toLowerCase();
       const basic=/basic attacks?/.test(what), weapon=/using a weapon|weapon attacks?|with weapons?|weapon damage/.test(what), melee=/melee/.test(what);
       const kws=[basic?'basic attack':'', weapon?'weapon':''].filter(Boolean);
-      const add=(stat,extra={})=>out.push({stat, value:v, type, kws:[...kws,...(extra.kws||[])], melee, whenBloodied:bl});
+      const add=(stat,extra={})=>out.push({stat, value:v, type, kws:[...new Set([...kws,...(extra.kws||[]),...(chg?['charge']:[])])], melee, whenBloodied:bl});
       let hit=false;
       if(/attack rolls?/.test(what)){ add('Attack rolls'); hit=true; }
       if(/damage rolls?/.test(what)){ add('Damage rolls'); hit=true; }
@@ -561,7 +565,7 @@ Object.assign(Builder,{
   chargeCalc(){
     const mba=this.sheetPowers().find(p=>p.id==='ID_INTERNAL_POWER_MELEE_BASIC_ATTACK');
     const rows=[];
-    if(mba) for(const r of this.powerCalc(mba).rows) rows.push({...r, atk:r.atk+1, atkParts:[...r.atkParts,[1,'charging']]});
+    if(mba) for(const r of this.powerCalc(mba,{charge:true}).rows) rows.push({...r, atk:r.atk+1, atkParts:[...r.atkParts,[1,'charging']]});
     const subs=this.basicSubstitutes();
     return {rows, weaponPower:true, note:'Charge: standard action. Move up to your speed (at least 2 squares, toward the nearest square from which you can attack), then make a melee basic attack or a bull rush with +1 to the attack roll. After a charge you can\'t take further actions this turn unless you spend an action point.'
       +(subs.length?` Powers you can use in place of the melee basic attack: ${subs.map(p=>p.name).join(', ')} (+1 to the attack roll when charging).`:'')};
@@ -665,7 +669,7 @@ Object.assign(Builder,{
       const cardId=c.rules.find(([t,a])=>t==='grant' && db.els[a.name]?.type==='Power' && /^Companion:/.test(db.els[a.name].name))?.[1].name;
       const card=db.els[cardId], ms=card?modSpec(card,st):{};
       const max=((+String(ms['Hit Points']||'').replace(/[^\d]/g,''))||(num('Hit Points at 1st Level')+num('Hit Points per Level Gained')*L))+bs('Hit Points');
-      out.push({key:slot.key, name:ci.name||ci.desc||c.name, kind:ci.desc||c.name, max, beast:{...this.beastStats(), name:ci.name||ci.desc||c.name}});
+      out.push({key:slot.key, name:ci.name||ci.desc||c.name, kind:ci.desc||c.name, max, el:c, cardSpec:ms, beast:{...this.beastStats(), name:ci.name||ci.desc||c.name}});
     }
     for(const p of [...st.granted.values()].filter(e=>e.type==='Power' && (sp(e,'Animal Companion') || /^ID_TIV_COMPANION_/.test(e.id) && sp(e,'Defenses')))){
       if(out.some(o=>o.kind===p.name)) continue;
@@ -702,6 +706,33 @@ Object.assign(Builder,{
     }
     return out;
   },
+  /* a companion's skills, for the Skills tab: [skill, total, trained, parts]. A beast companion uses one-half your
+     level + its ability modifier, +5 when trained, + bonuses from your feats (Beast Guidance: +2 to your trained
+     skills). A companion card that prints its skills ("Stealth +9", "Perception equal to yours + 2") shows those. */
+  petSkills(pet){
+    const st=this.st, half=Math.floor(st.level/2), db=RULES.db, bs=n=>st.stat('BEAST.'+n)||0, out=[];
+    if(pet.el){
+      const c=pet.el, num=k=>+String(sp(c,k)).replace(/[^\d-]/g,'')||0;
+      const score=a=>st.stat('Companion.'+a)||num(a)||10, mod=a=>Math.floor((score(a)-10)/2);
+      const names=(String(pet.cardSpec?.['Trained Skills']||'').trim() || sp(c,'Trained Skills').split(',').map(x=>db.els[x.trim()]?.name||x.trim()).join(', '))
+        .split(/\s*,\s*/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+      for(const k of SKILLS){
+        const a=this.skillAbility(k)||'Wisdom', tr=names.includes(k.toLowerCase());
+        const extra=st.stat.parts('BEAST.'+k+' misc').filter(x=>x.value).map(x=>[x.value,(x.type?x.type+' bonus - ':'')+(db.els[x.src]?.name||'')]);
+        const parts=[[half,'one-half your level'],[mod(a),a+' modifier ('+score(a)+')'],...(tr?[[5,'trained']]:[]),...extra].filter(([v])=>v);
+        out.push([k, parts.reduce((t,[v])=>t+v,0), tr, parts]);
+      }
+      return out;
+    }
+    const spec=pet.card ? modSpec(pet.card,st) : {}, txt=Object.values(spec).join('\n');
+    for(const k of SKILLS){
+      let m=new RegExp('\\b'+k+'\\s*\\+\\s*(\\d+)','i').exec(String(spec['Skills']||''));
+      if(m){ out.push([k, +m[1], true, [[+m[1],'from its card']]]); continue; }
+      m=new RegExp('\\b'+k+'\\s*\\(equal to yours(?:\\s*\\+\\s*(\\d+))?\\)','i').exec(txt);
+      if(m){ const v=this.sv(k)+(+m[1]||0); out.push([k, v, false, [[this.sv(k),'your '+k],...(m[1]?[[+m[1],'from its card']]:[])]]); }
+    }
+    return out;
+  },
   // the beast companion's numbers, for powers it attacks with
   beastStats(){
     const st=this.st, L=st.level;
@@ -714,7 +745,7 @@ Object.assign(Builder,{
     return {name:ci.name||(!ci.desc&&imp?.name)||c.name, atk:num('Attack Bonus')+L+(st.stat('BEAST.attack rolls')||0), die:sp(c,'Damage')||'1d6',
       ability:ABILITIES.find(a=>new RegExp(a,'i').test(sp(c,'Ability Score'))) || 'Strength', mod:a=>Math.floor((score(a)-10)/2)};
   },
-  powerCalc(p){
+  powerCalc(p,opt={}){
     if(p.virtual) return p.calc || {rows:[]};
     const st=this.st, L=st.level, s=n=>this.sv(n);
     // "Primary Attack" / "Secondary Attack" (Dual Strike): the primary line is worked out; main and off hand get their own rows
@@ -723,7 +754,7 @@ Object.assign(Builder,{
     const byHand=/main weapon/i.test(handsText) && /off-hand weapon/i.test(handsText);
     if(!atkText && /make a melee basic attack/i.test(sp(p,'Effect')+' '+sp(p,'Hit'))){
       const mba=this.sheetPowers().find(x=>x.id==='ID_INTERNAL_POWER_MELEE_BASIC_ATTACK');
-      if(mba && mba!==p) return {...this.powerCalc(mba), note:'This power makes a melee basic attack: these are its numbers.'};
+      if(mba && mba!==p) return {...this.powerCalc(mba,opt), note:'This power makes a melee basic attack: these are its numbers.'};
     }
     if(!atkText){ const x=this.effectSummary(p); return {rows:[], summary:x, note:x?'Worked out: '+x+'.':''}; }
     // the attack line for this level ("Level 21: Your highest ability modifier +6 vs. Reflex")
@@ -767,7 +798,7 @@ Object.assign(Builder,{
     const halfLevelDmg=terms.some(t=>/one-half your level/i.test(t));
     const hasDamage=!!(wCount||bCount||dice||dmgAbils.length||beastMods.length);
     // bonuses from feats, features and items that apply to this attack (keys like "weapon,heavy blade group:attack")
-    const ctxBase=new Set([...kw, kind, isWeapon?'weapon':'', isImpl?'implement':'', basic?(kind+' basic'):'', basic?'basic attack':'', p.name.toLowerCase(), p.id.toLowerCase(), sp(p,'Class').toLowerCase(), def.toLowerCase()].filter(Boolean));
+    const ctxBase=new Set([...kw, opt.charge?'charge':'', kind, isWeapon?'weapon':'', isImpl?'implement':'', basic?(kind+' basic'):'', basic?'basic attack':'', p.name.toLowerCase(), p.id.toLowerCase(), sp(p,'Class').toLowerCase(), def.toLowerCase()].filter(Boolean));
     const gather=(ctx,what)=>{
       const parts=[];
       for(const k of st.stat.keys()){
@@ -893,13 +924,24 @@ Object.assign(Builder,{
         el('td',{class:'muted small',text:a?a.slice(0,3).toUpperCase():''}), el('td',{text:tr?'trained':''}), el('td',{class:'strong',text:fmt(v)})), how);
     }
     const sk=el('div',{class:'bcard'}, el('h3',{text:'Skills'}), el('p',{class:'muted small',text:'Click a skill to see what adds up to it.'}), el('table',{class:'sktable'}, ...rows));
+    // the companions' skills, beside yours: a skill that adds up to 0 is left out
+    const petCards=this.pets().map(pet=>{
+      const list=this.petSkills(pet).filter(([,v])=>v!==0); if(!list.length) return null;
+      const prow=[];
+      for(const [k,v,tr,parts] of list){
+        const how=el('tr',{class:'how',hidden:true}, el('td',{colspan:3}, el('ul',{class:'plainlist small'}, ...parts.map(([x,l])=>el('li',{text:fmt(x)+' '+l})))));
+        prow.push(el('tr',{class:tr?'trained':''}, el('td',{}, el('button',{class:'linkbtn',type:'button',text:k,onclick:()=>{ how.hidden=!how.hidden; }})),
+          el('td',{text:tr?'trained':''}), el('td',{class:'strong',text:fmt(v)})), how);
+      }
+      return el('div',{class:'bcard'}, el('h3',{text:pet.name+"'s skills"}), el('p',{class:'muted small',text:pet.name!==pet.kind?pet.kind:'Companion'}), el('table',{class:'sktable'}, ...prow));
+    }).filter(Boolean);
     // the actions everyone can take in combat, by action type
     const acts=el('div',{class:'bcard wide'}, el('h3',{text:'Actions in combat'}),
       el('p',{class:'muted small',text:'On your turn: a standard, a move and a minor action (you can take a move or minor action instead of a standard, and a minor instead of a move), plus any number of free actions. Immediate actions: one per round, not on your own turn.'}),
       el('div',{class:'actgrid'}, ...COMBAT_ACTIONS.map(([type,list])=>el('div',{}, el('h4',{text:type}),
         el('ul',{class:'plainlist'}, ...list.map(([n,t])=>el('li',{}, el('b',{text:n}), t?' — '+t:'')))))));
     linkTerms(acts,'');
-    return [el('div',{class:'cols2 fit'}, ab, sk), acts];
+    return [el('div',{class:'cols2 fit'}, ab, sk, ...petCards), acts];
   },
 
   /* ---------- Features & Feats ---------- */

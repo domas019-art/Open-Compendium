@@ -91,6 +91,8 @@ const Units={
     t=t.replace(/(Weight\s*:?\s*[—–-])\s*lb\.?/gi,'$1 kg');
     // heights: 6'2" -> 188 cm
     t=t.replace(this.reHeight,(m,f,i)=>Math.round((+f*12+(+i))*2.54)+' cm');
+    // a whole-feet end of a height range: pixie "0'6'' - 1'" -> "15 cm - 30 cm"
+    t=t.replace(/(\d+ cm\s*[-–]\s*)(\d)\s*['′](?![\d'a-z])/gi,(m,a,f)=>a+Math.round(+f*30.48)+' cm').replace(/\b(\d)\s*['′](\s*[-–]\s*\d+ cm)/g,(m,f,b)=>Math.round(+f*30.48)+' cm'+b);
     // grid areas: "5-foot radius" -> "1-square radius" (a square is 5 feet)
     t=t.replace(this.reGrid,(m,n,sep,what)=>+n%5===0 ? (+n/5)+'-square'+sep+what : m);
     // ranges: "160 - 210 lb." / "10 to 20 feet"
