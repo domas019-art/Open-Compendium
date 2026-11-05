@@ -1,17 +1,17 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.64';
+const APP_VERSION = '0.99.65';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
 const S = {cat:null, q:'', full:false, filters:{}, sort:{col:'Name',dir:1}, limit:300, sel:null,
-           lowCache:{}, meta:{}, terms:null, hidden:new Set(), books:[]};
+           lowCache:{}, meta:{}, terms:null, hidden:new Set(), books:[], advOn:new Set()};
 
 /* ---------- settings that survive restarts ---------- */
 const SETKEY = 'open-compendium-settings';
 function loadSettings(){ try{ const o=JSON.parse(localStorage.getItem(SETKEY)||'{}');
-  if(o.sort && o.sort.col) S.sort=o.sort; if(Array.isArray(o.hiddenBooks)) S.hidden=new Set(o.hiddenBooks); }catch(e){} }
-function saveSettings(){ try{ localStorage.setItem(SETKEY, JSON.stringify({sort:S.sort, hiddenBooks:[...S.hidden]})); }catch(e){} }
+  if(o.sort && o.sort.col) S.sort=o.sort; if(Array.isArray(o.hiddenBooks)) S.hidden=new Set(o.hiddenBooks); if(Array.isArray(o.adventures)) S.advOn=new Set(o.adventures); }catch(e){} }
+function saveSettings(){ try{ localStorage.setItem(SETKEY, JSON.stringify({sort:S.sort, hiddenBooks:[...S.hidden], adventures:[...S.advOn]})); }catch(e){} }
 loadSettings();
 
 /* ---------- reading the library files (they are parsed, never executed) ---------- */
@@ -211,7 +211,8 @@ function startNum(v){ const m=NUM_RE.exec(String(v)); return m ? parseFloat(m[0]
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const V = cat => views[cat];
 const where = id => S.cat===ALL ? views[ALL].ref[id] : [S.cat,id];     // list id -> [category, entry id]
-function bookOk(v){ if(!S.hidden.size) return true; const b=bookTokens(v); return !b.length || b.some(x=>!S.hidden.has(x)); }
+// adventures never hide anything: their monsters, traps and items stay usable with the adventure unticked
+function bookOk(v){ if(!S.hidden.size) return true; const b=bookTokens(v).filter(x=>!isAdventure(bookLabel(x))); return !b.length || b.some(x=>!S.hidden.has(x)); }
 
 function prepare(){
   for(const c of Object.values(lib)){
@@ -330,43 +331,75 @@ function bookLabel(code){
 }
 const stripThe = t => t.replace(/^the\s+/i,'');
 
+/* ---------- adventures ----------
+   Adventures sit in their own group in both book lists, unticked unless chosen. They never hide content.
+   Ticking one ticks the books it needs; a needed book left unticked shows its title in red.
+   needs: only what the adventure itself says it needs (empty until checked). */
+const ADVENTURES = {
+  "H1 Keep on the Shadowfell":{}, "H2 Thunderspire Labyrinth":{needs:['PHB','DMG','MM']}, "H3 Pyramid of Shadows":{needs:['PHB','DMG','MM']},
+  "P1 King of the Trollhaunt Warrens":{needs:['PHB','DMG','MM']}, "P2 Demon Queen Enclave":{needs:['PHB','DMG','MM']}, "P3 Assault on Nightwyrm Fortress":{needs:['PHB','DMG','MM']},
+  "E1 Death's Reach":{needs:['PHB','DMG','MM']}, "E2 Kingdom of the Ghouls":{needs:['PHB','DMG','MM']}, "E3 Prince of Undeath":{needs:['PHB','DMG','MM']},
+  "FR1 Scepter Tower of Spellgard":{needs:['PHB','DMG','MM']}, "HS1 The Slaying Stone":{}, "HS2 Orcs of Stonefang Pass":{needs:['PHB','DMG','MM']},
+  "Marauders of the Dune Sea":{needs:['PHB','DMG']}, "Madness at Gardmore Abbey":{}, "Revenge of the Giants":{}, "Seekers of the Ashen Crown":{},
+  "Tomb of Horrors":{}, "RPGA Tomb of Horrors":{}, "Halls of Undermountain":{}, "Hammerfast":{}, "Vor Rukoth":{}, "Vor Rukoth: An Ancient Ruins Adventure Site":{},
+  "Beyond the Crystal Cave":{}, "Council of Spiders":{}, "Web of the Spider Queen":{},
+  "RPGA Khyber's Harvest":{}, "RPGA Treasure of Talon Pass":{}, "RPGA Village of Hommlet":{},
+  "ADCP3−2 From Dawn Till Dusk":{}, "ADCP4-2 The Lost City of Suldolphor":{}, "NETH3−3 Seek and Destroy":{}, "ELTU3−3 The Way of All Flesh":{}, "EPIC 3-1":{}
+};
+const isAdventure = name => Object.prototype.hasOwnProperty.call(ADVENTURES,name);
+// what an adventure needs, as full book names (the builder's names), or as compendium codes
+const advNeeds = name => ((ADVENTURES[name]||{}).needs||[]).map(bookLabel);
+
 function buildBooks(){
   const set=new Set();
   for(const c of Object.values(lib)){ const sc=srcCol(c); if(sc<0) continue; c.rows.forEach(r=>bookTokens(r[sc]).forEach(b=>set.add(b))); }
-  const all=[...set]; S.books=all;
+  const every=[...set], advs=every.filter(b=>isAdventure(bookLabel(b))).sort((a,b)=>stripThe(bookLabel(a)).localeCompare(stripThe(bookLabel(b)),undefined,{sensitivity:'base',numeric:true}));
+  const all=every.filter(b=>!advs.includes(b)); S.books=all; S.advs=advs;
   const mags=all.filter(isMagazine).sort((a,b)=>bookLabel(a).localeCompare(bookLabel(b),undefined,{numeric:true}));
   const mains=all.filter(b=>!isMagazine(b)).sort((a,b)=>stripThe(bookLabel(a)).localeCompare(stripThe(bookLabel(b)),undefined,{sensitivity:'base',numeric:true}));
   const panel=$('#bookPanel'); panel.replaceChildren();
-  $('#booksBtn').style.display = all.length ? '' : 'none';
-  const boxes=new Map(), items=[];
-  const setCodes=(codes,on)=>{ codes.forEach(b=>{ on ? S.hidden.delete(b) : S.hidden.add(b); boxes.get(b).checked=on; }); booksChanged(); };
+  $('#booksBtn').style.display = every.length ? '' : 'none';
+  const boxes=new Map(), labels=new Map(), items=[];
+  const codeOf=new Map(all.map(b=>[bookLabel(b),b]));
+  // a book that a ticked adventure needs, but is itself unticked, shows in red
+  const paint=()=>{ const need=new Set(); S.advs.filter(a=>S.advOn.has(a)).forEach(a=>advNeeds(bookLabel(a)).forEach(n=>{ const c=codeOf.get(n); if(c) need.add(c); }));
+    for(const [b,l] of labels) l.classList.toggle('needed', need.has(b) && S.hidden.has(b)); };
+  const setCodes=(codes,on)=>{ codes.forEach(b=>{ on ? S.hidden.delete(b) : S.hidden.add(b); boxes.get(b).checked=on; }); paint(); booksChanged(); };
+  const setAdv=(a,on)=>{ on ? S.advOn.add(a) : S.advOn.delete(a); boxes.get(a).checked=on;
+    if(on) advNeeds(bookLabel(a)).forEach(n=>{ const c=codeOf.get(n); if(c){ S.hidden.delete(c); boxes.get(c).checked=true; } });
+    paint(); booksChanged(); };
   const btn=(t,fn)=>{ const b=document.createElement('button'); b.className='btn'; b.type='button'; b.textContent=t; b.onclick=fn; return b; };
   const top=document.createElement('div'); top.className='bar';
   const find=document.createElement('input'); find.type='search'; find.placeholder='Find a book…';
   find.oninput=()=>{ const q=find.value.toLowerCase().trim(); items.forEach(([el,txt])=>el.style.display = txt.includes(q) ? '' : 'none'); };
   top.append(find, btn('Select everything',()=>setCodes(all,true)), btn('Select nothing',()=>setCodes(all,false)));
   panel.append(top);
-  const group=(title,codes)=>{
+  const group=(title,codes,adv)=>{
     if(!codes.length) return;
     const h=document.createElement('div'); h.className='ghead';
     const t=document.createElement('strong'); t.textContent=title;
-    h.append(t, btn('Select all',()=>setCodes(codes,true)), btn('Select none',()=>setCodes(codes,false)));
+    if(adv) h.append(t, btn('Select none',()=>codes.forEach(a=>setAdv(a,false))));
+    else h.append(t, btn('Select all',()=>setCodes(codes,true)), btn('Select none',()=>setCodes(codes,false)));
     const list=document.createElement('div'); list.className='list';
     for(const b of codes){
       const l=document.createElement('label'), x=document.createElement('input');
-      x.type='checkbox'; x.checked=!S.hidden.has(b);
-      x.onchange=()=>{ x.checked ? S.hidden.delete(b) : S.hidden.add(b); booksChanged(); };
-      boxes.set(b,x);
+      x.type='checkbox'; x.checked=adv ? S.advOn.has(b) : !S.hidden.has(b);
+      x.onchange=adv ? ()=>setAdv(b,x.checked) : ()=>{ x.checked ? S.hidden.delete(b) : S.hidden.add(b); paint(); booksChanged(); };
+      boxes.set(b,x); if(!adv) labels.set(b,l);
       const name=bookLabel(b), sp=document.createElement('span'); sp.textContent=name; l.title=name;
       l.append(x,sp); list.append(l); items.push([l,(name+' '+b).toLowerCase()]);
     }
     panel.append(h,list);
+    if(adv){ const n=document.createElement('p'); n.className='muted small'; n.textContent='Adventures never hide anything: their monsters, traps and items are always listed. Ticking one also ticks the books it needs; a needed book that is unticked shows in red.'; panel.insertBefore(n,list); }
   };
   group('Books',mains);
   group('Magazines',mags);
+  group('Adventures',advs,true);
+  paint();
   updateBooksBtn();
 }
-function updateBooksBtn(){ const on=S.books.filter(b=>!S.hidden.has(b)).length; $('#booksBtn').textContent=`Books ${on}/${S.books.length}`; }
+const advNote = n => n ? ` · ${n} adventure${n>1?'s':''}` : '';
+function updateBooksBtn(){ const on=S.books.filter(b=>!S.hidden.has(b)).length; $('#booksBtn').textContent=`Books ${on}/${S.books.length}`+advNote((S.advs||[]).filter(a=>S.advOn.has(a)).length); }
 function updateCounts(){
   document.querySelectorAll('#cats button').forEach(b=>{ const n=activeCount(V(b.dataset.cat));
     b.querySelector('small').textContent=n; b.classList.toggle('zero',n===0); });
@@ -405,7 +438,8 @@ function showTab(t){
   $('#compEmpty').hidden = !(t==='comp' && !Object.keys(lib).length);
   $('#builder').style.display = t==='builder' ? '' : 'none';
   $('#bookPanel').hidden=true; closePop();
-  $('#booksBtn').style.display = t==='comp' && S.books.length ? '' : 'none';    // the builder uses its own campaign book list
+  $('#booksBtn').style.display = t==='comp' && S.books.length ? '' : 'none';    // the builder shows its own campaign book list there
+  if(t==='comp'){ updateBooksBtn(); $('#booksBtn').title='The books the compendium shows'; }
   if(t==='builder') Builder.show();
 }
 
@@ -638,7 +672,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>showTab(b.dat
       const r=b.getBoundingClientRect(); nav.insertBefore(drag, e.clientX<r.left+r.width/2 ? b : b.nextSibling); });
   }
 })();
-$('#booksBtn').onclick=()=>{ $('#bookPanel').hidden=!$('#bookPanel').hidden; };
+$('#booksBtn').onclick=()=>{ if(S.tab==='builder'){ Builder.openCampaign(); return; } $('#bookPanel').hidden=!$('#bookPanel').hidden; };
 $('#back').onclick=()=>document.body.classList.remove('showing');
 // light / dark toggle, remembered
 (function(){ const b=$('#themeBtn'), root=document.documentElement;
