@@ -398,16 +398,17 @@ Object.assign(Builder,{
     const pets=this.pets();
     // the companions' attacks get their own column: powers that attack with the beast, their cards' attacks and auras
     // (the animal master's distracting attack is made with the animal minion: it is shown with the companions too)
-    const beastPower=p=>/beast'?s attack bonus/i.test(sp(p,'Attack')) || /\banimal minion\b/i.test(sp(p,'Requirement'));
-    const all=this.sheetPowers().filter(p=>!(pets.length && beastPower(p))), util=p=>/utility/i.test(sp(p,'Power Type')+' '+sp(p,'Display'));
-    const petList=pets.length ? [...this.sheetPowers().filter(beastPower), ...pets.flatMap(x=>[x.attack,...(x.acts||[]),...(x.auras||[])]).filter(Boolean)] : [];
+    const beastPower=p=>/beast'?s attack bonus/i.test(sp(p,'Attack')) || /\banimal minion\b/i.test(sp(p,'Requirement')) || /^Familiar:/.test(p.name);
+    const all=this.sheetPowers().filter(p=>!((pets.length || [...st.granted.values()].some(e=>e.type==='Familiar')) && beastPower(p))), util=p=>/utility/i.test(sp(p,'Power Type')+' '+sp(p,'Display'));
+    const fams=[...st.granted.values()].filter(e=>e.type==='Familiar');
+    const petList=pets.length||fams.length ? [...this.sheetPowers().filter(beastPower), ...pets.flatMap(x=>[x.attack,...(x.acts||[]),...(x.auras||[])]).filter(Boolean)] : [];
     const cols=[['At-will',p=>/at-will/i.test(sp(p,'Power Usage'))&&!util(p),'u0'],['Encounter',p=>/encounter/i.test(sp(p,'Power Usage'))&&!util(p),'u1'],
       ['Daily',p=>/daily/i.test(sp(p,'Power Usage'))&&!util(p),'u2'],['Utility',util,'u3']];
     const seen=new Set();
     const columns=cols.map(([t,f,cls])=>{ const list=all.filter(p=>!seen.has(p.id)&&f(p)); list.forEach(p=>seen.add(p.id));
       if(t==='At-will') list.splice(list.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
       return el('div',{class:'pcol '+cls}, el('h3',{text:t+' '}, el('small',{class:'muted',text:list.length})), this.powerList(list)); });
-    if(petList.length) columns.splice(4,0,el('div',{class:'pcol up'}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:pets.map(x=>x.name).join(' · ')})), this.powerList(petList)));
+    if(petList.length) columns.splice(4,0,el('div',{class:'pcol up'}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:[...pets.map(x=>x.name),...fams.map(f=>f.name)].join(' · ')})), this.powerList(petList)));
     const rest=all.filter(p=>!seen.has(p.id));
     if(rest.length) columns.push(el('div',{class:'pcol u3'}, el('h3',{text:'Other'}), this.powerList(rest)));
     const itemPw=this.itemAttacks();
@@ -948,6 +949,17 @@ Object.assign(Builder,{
       }
       return el('div',{class:'bcard'}, el('h3',{text:pet.name+"'s skills"}), el('p',{class:'muted small',text:pet.name!==pet.kind?pet.kind:'Companion'}), el('table',{class:'sktable'}, ...prow));
     }).filter(Boolean);
+    // a familiar uses your bonuses for all skill checks (Arcane Power), plus any bonus given to familiars
+    for(const f of [...st.granted.values()].filter(e=>e.type==='Familiar')){
+      const prow=[];
+      for(const k of SKILLS){
+        const parts=[[this.sv(k),'your '+k],...st.stat.parts('FAMILIAR.'+k+' misc').filter(x=>x.value).map(x=>[x.value,RULES.db.els[x.src]?.name||''])].filter(([v])=>v);
+        const v=parts.reduce((t,[x])=>t+x,0); if(!v) continue;
+        const how=el('tr',{class:'how',hidden:true}, el('td',{colspan:3}, el('ul',{class:'plainlist small'}, ...parts.map(([x,l])=>el('li',{text:fmt(x)+' '+l})))));
+        prow.push(el('tr',{}, el('td',{}, el('button',{class:'linkbtn',type:'button',text:k,onclick:()=>{ how.hidden=!how.hidden; }})), el('td',{}), el('td',{class:'strong',text:fmt(v)})), how);
+      }
+      petCards.push(el('div',{class:'bcard'}, el('h3',{text:f.name+" familiar's skills"}), el('p',{class:'muted small',text:'Familiar: uses your bonuses for all skill checks'}), el('table',{class:'sktable'}, ...prow)));
+    }
     // the actions everyone can take in combat, by action type
     const acts=el('div',{class:'bcard wide'}, el('h3',{text:'Actions in combat'}),
       el('p',{class:'muted small',text:'On your turn: a standard, a move and a minor action (you can take a move or minor action instead of a standard, and a minor instead of a move), plus any number of free actions. Immediate actions: one per round, not on your own turn.'}),
