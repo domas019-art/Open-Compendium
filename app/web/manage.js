@@ -299,7 +299,7 @@ function standardBlock(ci, L, kind, o, st){
   const line=(k,v)=>el('div',{}, el('b',{text:k+': '}), String(v??''));
   const named=t=>{ const m=/^([^:]{1,60}):\s*([\s\S]*)$/.exec(String(t).trim()); return m ? el('div',{class:'prel'}, el('b',{text:m[1]+': '}), m[2]) : el('div',{class:'prel',text:t}); };
   const head=el('div',{class:'comphead'}), title=()=>head.textContent=(ci.name?ci.name+' - ':'')+`Level ${L} ${ci.desc||kind}`; title();
-  const {extras}=beastBonus(st);
+  const {extras}=beastBonus(st,'BEAST.',o.bonus!==false);
   const box=el('div',{class:'compsheet'}, head,
     line('Ability Scores', o.abil.map(([a,v])=>a+': '+v).join(', ')),
     line('Size', o.size), line('Speed', o.speed), line('Vision', o.vision),
@@ -312,8 +312,8 @@ function standardBlock(ci, L, kind, o, st){
 }
 /* bonuses feats, features and items give a beast companion (BEAST.AC, BEAST.Hit Points...);
    only the ones that always apply, not "while adjacent to you" */
-function beastBonus(st, pre='BEAST.'){
-  const bs=n=>st.stat(pre+n)||0;
+function beastBonus(st, pre='BEAST.', on=true){
+  const bs=n=>on ? st.stat(pre+n)||0 : 0;
   const DEF={AC:['AC'],Fortitude:['Fortitude Defense','Fortitude'],Reflex:['Reflex Defense','Reflex'],Will:['Will Defense','Will']};
   const bump=d=>String(d).replace(/\b(AC|Fortitude|Reflex|Will)\s+(\d+)/g,(m,k,n)=>k+' '+(+n+DEF[k].reduce((t,x)=>t+bs(x),0)));
   const surges=t=>String(t).replace(/\((\d+) surges per day\)/i,(m,n)=>`(${Math.max(0,+n+bs('Healing Surges'))} surges per day)`);
@@ -333,11 +333,14 @@ function beastBonus(st, pre='BEAST.'){
   return {bs,bump,surges,speedUp,extras};
 }
 /* a companion that has its own card (fey beast, living zephyr...), turned into the standard creature block */
+/* a companion from a card (fey beast, animal master's companion): the beast companion's feats (Beast Guidance,
+   Human Beast Mastery...) count for it only with the free-acting companions house rule */
+const cardPetBonus=()=>!!(typeof Builder!=='undefined' && Builder.ch?.details?.freeBeasts);
 function cardPetSheet(p, cname, ci, st){
-  const spec=modSpec(p,st), L=st.level, {bs,bump,speedUp}=beastBonus(st);
+  const spec=modSpec(p,st), L=st.level, on=cardPetBonus(), {bs,bump,speedUp}=beastBonus(st,'BEAST.',on);
   const all=Object.values(spec).join('\n');
   // the sentinel's "Pet Hit Points" belong to its wolf or bear, not to a card companion
-  const hpb=bs('Hit Points')-(st.stat('Pet Hit Points')||0);
+  const hpb=on ? bs('Hit Points')-(st.stat('Pet Hit Points')||0) : 0;
   const hpText=String(spec['Hit Points']||'');
   const hp=/bloodied/i.test(hpText) ? Math.floor((st.stat('Hit Points')||0)/2)+hpb : (+hpText.replace(/[^\d]/g,'')||0)+hpb;
   const AB={Str:'Strength',Con:'Constitution',Dex:'Dexterity',Int:'Intelligence',Wis:'Wisdom',Cha:'Charisma'}, sc={};
@@ -365,7 +368,7 @@ function cardPetSheet(p, cname, ci, st){
   return standardBlock(ci, L, cname.replace(/^Trained\s+/,''), {
     abil:ABILITIES.map(a=>[a,sc[a]??10]), size, speed, vision, def, hp,
     surge:`${Math.floor(hp/4)} (${Math.max(0,bs('Healing Surges'))} surges per day)`,
-    atk, dmg, basic:`${name}; ${atk} vs. AC; ${hit}`, powers, skills:''}, st);
+    atk, dmg, basic:`${name}; ${atk} vs. AC; ${hit}`, powers, skills:'', bonus:on}, st);
 }
 function familiarSheet(f, st){
   // a familiar's defenses equal yours, +1 for each familiar feat beyond the first, plus FAMILIAR.* bonuses

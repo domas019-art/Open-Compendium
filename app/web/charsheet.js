@@ -675,7 +675,7 @@ Object.assign(Builder,{
       if(out.some(o=>o.kind===p.name)) continue;
       const key=this.cardPetKey(p,st), ci=this.ch.companionInfo?.[key]||{}, spec=modSpec(p,st);
       const kind=(sp(p,'Animal Companion').split(/\s+-\s+/)[0]||p.name).replace(/^Trained\s+/,'');
-      const hpb=bs('Hit Points')-(st.stat('Pet Hit Points')||0);
+      const on=cardPetBonus(), hpb=on ? bs('Hit Points')-(st.stat('Pet Hit Points')||0) : 0;
       const max=/bloodied/i.test(spec['Hit Points']||'') ? Math.floor(this.maxHP()/2)+hpb : (+String(spec['Hit Points']||'').replace(/[^\d]/g,'')||0)+hpb;
       const name=ci.name||kind;
       // its attack ("Claw: ... your level + 5 vs. AC  Hit: 1d8 + one-half your level damage")
@@ -688,8 +688,8 @@ Object.assign(Builder,{
       const die=(/\d+d\d+/.exec(hit)||[])[0]||'1d6', half=Math.floor(L/2);
       const AB={Str:'Strength',Con:'Constitution',Dex:'Dexterity',Int:'Intelligence',Wis:'Wisdom',Cha:'Charisma'}, sc={};
       for(const m of Object.values(spec).join('\n').matchAll(/\b(Str|Con|Dex|Int|Wis|Cha)\b:?\s*(\d+)/g)) sc[AB[m[1]]] ??= +m[2];
-      const atk=L+plus+bs('attack rolls'), flat=(/one-half your level/i.test(hit)?half:0);
-      const pet={key, name, kind, max, card:p};
+      const ab=on ? bs('attack rolls') : 0, atk=L+plus+ab, flat=(/one-half your level/i.test(hit)?half:0);
+      const pet={key, name, kind, max, card:p, sc};
       pet.beast={name, atk, die, ability:'Strength', mod:a=>Math.floor(((sc[a]||10)-10)/2)};
       if(ak){
         const aname=ak.replace(/\s*\(.*\)$/,'');
@@ -697,7 +697,7 @@ Object.assign(Builder,{
         pet.attack={id:'pet:'+p.id, virtual:true, petBasic:true, pet, name:aname, type:'Power',
           spec:{'Power Usage':'At-Will','Action Type':(/(Standard|Minor|Move) Action/i.exec(av)||['Standard action'])[0],'Attack Type':(/Attack:\s*(Melee \d+|Ranged \d+)/i.exec(av)||[])[1]||'Melee 1','Display':'Beast Basic Attack'},
           text:`${aname}: ${av}`,
-          calc:{rows:[{weapon:name, atk, def:def==='AC'?'AC':def, dmg, dice:die, diceNote:'(the card\'s dice)', atkParts:[[L,'your level'],[plus,'from the card'],...(bs('attack rolls')?[[bs('attack rolls'),'companion bonuses']]:[])], dmgParts:flat?[[flat,'one-half your level']]:[]}]}};
+          calc:{rows:[{weapon:name, atk, def:def==='AC'?'AC':def, dmg, dice:die, diceNote:'(the card\'s dice)', atkParts:[[L,'your level'],[plus,'from the card'],...(ab?[[ab,'companion bonuses']]:[])], dmgParts:flat?[[flat,'one-half your level']]:[]}]}};
       }
       // its auras and traits ("Alert Companion (Aura 1): ...")
       pet.auras=Object.entries(spec).filter(([k,v])=>/\(aura \d+\)/i.test(v) || /aura/i.test(k)).map(([k,v])=>{ v=String(v).trim(); const m=/^(\([^)]*\))\s*([\s\S]*)$/.exec(v);
@@ -724,12 +724,19 @@ Object.assign(Builder,{
       }
       return out;
     }
-    const spec=pet.card ? modSpec(pet.card,st) : {}, txt=Object.values(spec).join('\n');
+    const spec=pet.card ? modSpec(pet.card,st) : {}, txt=Object.values(spec).join('\n'), skillsTxt=String(spec['Skills']||'');
+    // a card that prints its skills ("Athletics +2, Stealth +9") has only those; otherwise (fey beasts) every skill is
+    // one-half your level (its level is yours) + its ability modifier
+    const listed=/[A-Za-z]\s*\+\s*\d/.test(skillsTxt), sc=pet.sc||{};
+    const extra=k=>cardPetBonus() ? st.stat.parts('BEAST.'+k+' misc').filter(x=>x.value).map(x=>[x.value,(x.type?x.type+' bonus - ':'')+(db.els[x.src]?.name||'')]) : [];
     for(const k of SKILLS){
-      let m=new RegExp('\\b'+k+'\\s*\\+\\s*(\\d+)','i').exec(String(spec['Skills']||''));
-      if(m){ out.push([k, +m[1], true, [[+m[1],'from its card']]]); continue; }
-      m=new RegExp('\\b'+k+'\\s*\\(equal to yours(?:\\s*\\+\\s*(\\d+))?\\)','i').exec(txt);
-      if(m){ const v=this.sv(k)+(+m[1]||0); out.push([k, v, false, [[this.sv(k),'your '+k],...(m[1]?[[+m[1],'from its card']]:[])]]); }
+      let m=new RegExp('\\b'+k+'\\s*\\+\\s*(\\d+)','i').exec(skillsTxt), parts;
+      if(m) parts=[[+m[1],'from its card']];
+      else if((m=new RegExp('\\b'+k+'\\s*\\(?equal to yours(?:\\s*\\+\\s*(\\d+))?','i').exec(txt))) parts=[[this.sv(k),'your '+k],...(m[1]?[[+m[1],'from its card']]:[])];
+      else if(!listed && Object.keys(sc).length){ const a=this.skillAbility(k)||'Wisdom', s=sc[a]??10; parts=[[half,'one-half your level'],[Math.floor((s-10)/2),a+' modifier ('+s+')']]; }
+      else continue;
+      parts=[...parts,...extra(k)].filter(([v])=>v);
+      out.push([k, parts.reduce((t,[v])=>t+v,0), !!(m && listed), parts]);
     }
     return out;
   },
