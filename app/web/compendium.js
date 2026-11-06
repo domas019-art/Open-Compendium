@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.75';
+const APP_VERSION = '0.99.76';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -487,6 +487,12 @@ function sanitize(html){
 function termIndex(){
   if(S.terms) return S.terms;
   const exact=new Map(), loose=new Map(), titles=new Set();
+  // diseases a monster passes on ("level 8 mummy rot") open their own entry too
+  for(const [cat,c] of Object.entries(lib)){
+    if(!/^disease$/i.test(cat)) continue;
+    const ni=nameCol(c);
+    for(const r of c.rows){ const n=String(r[ni]).trim(); if(n.length>=6 && !loose.has(n.toLowerCase())) loose.set(n.toLowerCase(),[cat,r[0]]); }
+  }
   for(const [cat,c] of Object.entries(lib)){
     if(!/glossary/i.test(cat)) continue;
     const ni=nameCol(c), ti=c.cols.indexOf('Type'), ki=c.cols.indexOf('Category');
