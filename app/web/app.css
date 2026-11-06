@@ -710,3 +710,5 @@ dialog.askdlg p{margin:0}
 .trapblockbody .bul,.trapblockbody .line{display:block}
 .trapblockbody .bul{padding-left:1.5em;text-indent:-1.5em}
 .trapblockbody .star{display:inline-block;width:1.5em;text-indent:0}
+/* newer monster layout: the action groups (Traits, Standard Actions, ...) as narrow bands, as in the books */
+.entry h1.monster ~ h2{font-size:13px;font-variant:small-caps;letter-spacing:.04em;margin:8px 0 0;padding:2px 12px;background:#8a8aa0;color:#fff;font-weight:700}
