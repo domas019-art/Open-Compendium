@@ -697,3 +697,6 @@ dialog.askdlg p{margin:0}
 
 /* a choice that belongs to the pick above it (a feat's own choice) sits indented under it */
 .slot.subslot{margin-left:22px;padding-left:10px;border-left:3px solid var(--line)}
+
+/* a long source list stays two lines high; hovering shows every book */
+.srccell{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:240px}

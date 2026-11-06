@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.69';
+const APP_VERSION = '0.99.70';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -450,14 +450,17 @@ function selectCat(cat){
 }
 
 function renderList(){
-  const c=V(S.cat), rows=visibleRows(), mt=meta(S.cat);
+  const c=V(S.cat), rows=visibleRows(), mt=meta(S.cat), sc=srcCol(c);
   const shown=rows.slice(0,S.limit);
   $('#count').textContent=`${rows.length} of ${activeCount(c)}` + (rows.length>shown.length ? ` — showing ${shown.length}` : '');
   const frag=document.createDocumentFragment();
   for(const r of shown){
     const tr=document.createElement('tr'); tr.className='row'+(r[0]===S.sel?' on':'');
     r.forEach((v,i)=>{ if(c.cols[i]==='ID') return; const td=document.createElement('td');
-      const n=mt[i].numeric ? startNum(v) : null; td.textContent = n===null ? v : String(n); tr.append(td); });
+      const n=mt[i].numeric ? startNum(v) : null;
+      if(i===sc && v){ const d=document.createElement('div'); d.className='srccell'; d.textContent=v; td.title=bookTokens(v).map(bookLabel).join('\n'); td.append(d); }   // long source lists: two lines, the rest on hover
+      else td.textContent = n===null ? v : String(n);
+      tr.append(td); });
     tr.onclick=()=>{ S.sel=r[0]; document.querySelectorAll('tr.row.on').forEach(e=>e.classList.remove('on')); tr.classList.add('on'); showEntry(r[0]); };
     frag.append(tr);
   }
