@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.74';
+const APP_VERSION = '0.99.75';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -564,6 +564,108 @@ function statColumns(root){
   });
 }
 
+/* ---------- newer monster stat blocks (Monster Vault and later) shown in the older layout ----------
+   Display only: the library text is not changed. Stats table -> stat lines; "Standard Actions" etc. headings
+   go into each power's line as (standard; at-will); Attack and Hit join into one line, as in the older books. */
+const ACT={'Standard Actions':'standard','Move Actions':'move','Minor Actions':'minor','Free Actions':'free','Triggered Actions':'','Traits':null};
+function lcFirst(t){ return /^(The|Each|A|An|This|That|It|Its|One|Any|Until|You|If|Whenever|When|All|Enemies|Allies|Creatures|Enemy|Ally|Every|Bloodied|Nonminion|Living)\b/.test(t) ? t[0].toLowerCase()+t.slice(1) : t; }
+function oldMonsterLayout(root){
+  const h1=root.querySelector('h1.monster'), tb=h1 && h1.nextElementSibling;
+  if(!tb || tb.tagName!=='TABLE' || !tb.classList.contains('bodytable')) return;
+  try{
+    // 1. the stats table
+    let init='', perc='', senses=[], left=[];
+    for(const tr of tb.querySelectorAll('tr')){
+      const tds=[...tr.children];
+      for(const td of tds){
+        const h=td.innerHTML.trim(); if(!h) continue;
+        if(td.classList.contains('rightalign')){
+          if(/<b>\s*Initiative/i.test(h)) init=h.replace(/<b>\s*Initiative\s*<\/b>\s*/i,'');
+          else if(/<b>\s*Perception/i.test(h)) perc=h.replace(/<b>\s*Perception\s*<\/b>\s*/i,'');
+          else senses.push(td.textContent.trim());
+        } else left.push(h);
+      }
+    }
+    const sen=senses.join(', ').replace(/^./,c=>c.toLowerCase());
+    const lines=[`<b>Initiative</b> ${init}        <b>Senses</b> Perception ${perc.trim()}${sen?'; '+sen:''}`];
+    const auras=[], rest=[];
+    // 2. walk the sections
+    let sect=null, node=tb.nextElementSibling; const out=[];
+    let pend=null;                 // the power being built: {head, act, usage, lines:[], trig, actWord}
+    const flush=()=>{ if(!pend) return;
+      if(pend.aura){ const kw=pend.kw?' ('+pend.kw.replace(/(^|, )(\w)/g,(m,a,c)=>a+c.toUpperCase())+')':''; auras.push(`<b>${pend.name}</b>${kw} aura ${pend.aura}; ${lcFirst(pend.body.join(' '))}`); pend=null; return; }
+      let paren=[];
+      if(pend.act===null){ /* trait */ }
+      else{
+        let a=pend.act;
+        if(pend.actWord) a={'immediate reaction':'immediate reaction','immediate interrupt':'immediate interrupt','opportunity action':'opportunity','free action':'free','no action':'','minor action':'minor','move action':'move','standard action':'standard'}[pend.actWord.toLowerCase()] ?? pend.actWord.toLowerCase();
+        if(pend.trig){ let t=lcFirst(pend.trig.trim()).replace(/\.\s*$/,''); if(!/^(when|whenever|if|while|after|before|the first time|at the start|at the end)\b/i.test(t)) t='when '+t; a+=(a?', ':'')+t; }
+        if(a) paren.push(a);
+        if(pend.usage) paren.push(pend.usage);
+      }
+      const kw=pend.kw ? ' ✦ <b>'+pend.kw.replace(/^./,c=>c.toUpperCase()).replace(/, (\w)/g,(m,c)=>', '+c.toUpperCase())+'</b>' : '';
+      const head=`${pend.icon}<b>${pend.name}</b>${paren.length?' ('+paren.join('; ')+')':''}${kw}${pend.extra||''}`;
+      out.push(`<p class='flavor alt'>${head}</p>`);
+      if(pend.body.length) out.push(`<p class=flavorIndent>${pend.body.reduce((a,b)=>a+(/^\d+[.—]/.test(b.replace(/<[^>]+>/g,''))?'<br>':' ')+b)}</p>`);
+      pend=null; };
+    const tail=[];
+    while(node && !node.classList.contains('publishedIn')){
+      const nx=node.nextElementSibling;
+      if(node.tagName==='H2'){ flush(); sect=node.textContent.trim(); }
+      else if(node.matches("p.flavor.alt") && pend===null && /<b>\s*(Skills|Str|Alignment|Equipment)\b/.test(node.innerHTML) || node.matches('p.flavor:not(.alt)') || node.tagName==='BR' && !pend && tail.length){ flush(); if(node.tagName!=='BR') tail.push(node.innerHTML); }
+      else if(node.matches("p.flavor.alt")){
+        flush();
+        const h=node.innerHTML.trim();
+        if(/<b>\s*(Skills|Str|Alignment|Equipment)\b/.test(h)){ tail.push(h); node.remove(); node=nx; continue; }
+        const m=h.match(/^([^<]*)<b>([^<]*)<\/b>\s*(?:\(([^)]*)\))?\s*(?:✦\s*(.*))?$/s);
+        if(!m){ out.push(node.outerHTML); node.remove(); node=nx; continue; }
+        let usage=(m[4]||'').replace(/<\/?b>/g,'').trim();
+        const aura=usage.match(/^Aura\s+(\d+)/i);
+        pend={icon:m[1], name:m[2].trim(), kw:(m[3]||'').trim(), usage:'', act:ACT[sect]===undefined?null:ACT[sect], body:[], trig:'', actWord:''};
+        if(aura){ pend.aura=aura[1]; }
+        else if(usage){ pend.usage=usage.replace(/^At-Will/i,'at-will').replace(/^Encounter$/i,'encounter').replace(/^Daily$/i,'daily').replace(/^Recharge\b/,'recharge').replace(/^(\d)\/Encounter$/i,'$1/encounter'); }
+        if(pend.act===null && sect!=='Traits') pend.act='';
+      }
+      else if(node.matches('p.flavorIndent') && pend){
+        let h=node.innerHTML.trim();
+        const lab=h.match(/^<i>([^<]*?):?<\/i>:?\s*/);
+        if(lab){
+          const L=lab[1].trim(), body=h.slice(lab[0].length).trim();
+          const act=L.match(/^(Attack|Effect)\s*\(([^)]*)\)$/);
+          if(L==='Trigger'){ pend.trig=body; }
+          else if(L==='Attack' || act&&act[1]==='Attack'){ if(act) pend.actWord=act[2]; pend.body.push(body.replace(/\s*$/,'')); }
+          else if(L==='Hit' && pend.body.length && !/<i>/.test(pend.body[pend.body.length-1].slice(-40))){ pend.body[pend.body.length-1]+='; '+lcFirst(body); }
+          else if(act && act[1]==='Effect'){ pend.actWord=act[2]; pend.body.push(body); }
+          else if(L==='Effect' && !pend.body.length){ pend.body.push(body); }
+          else pend.body.push(`<i>${L}:</i> ${body}`);
+          pend.body=pend.body.map(x=>x.trim());
+        } else pend.body.push(h);
+      }
+      else if(node.tagName==='BR'){ }
+      else { flush(); out.push(node.outerHTML); }
+      node.remove(); node=nx;
+    }
+    flush();
+    // auras sit with the stats, as the older layout prints them
+    const keep=[];
+    for(let i=0;i<out.length;i++){
+      const m=out[i].match(/^<p class='flavor alt'>([^]*?)<b>([^<]*)<\/b>(?: \(([^)]*)\))?( ✦ <b>([^<]*)<\/b>)?<\/p>$/);
+      keep.push(out[i]);
+    }
+    lines.push(...auras); for(const l of left) lines.push(l);
+    const stat=document.createElement('p'); stat.className='flavor'; stat.innerHTML=lines.join('<br>');
+    tb.replaceWith(stat);
+    // tail: Alignment/Languages first, then Skills, abilities, Equipment
+    const segs=tail.join('<br>').split(/<br\s*\/?>/i).map(x=>x.trim()).filter(Boolean);
+    const al=segs.filter(x=>/^<b>\s*Alignment/.test(x)), sk=segs.filter(x=>/^<b>\s*Skills/.test(x)), ab=segs.filter(x=>/^<b>\s*(Str|Con)\b/.test(x)),
+          eq=segs.filter(x=>!al.includes(x)&&!sk.includes(x)&&!ab.includes(x));
+    keep.push(`<p class='flavor alt'>${[...al,...sk,...ab].join('<br>')}</p>`+(eq.length?`<p class='flavor alt'>${eq.join('<br>')}</p>`:''));
+    stat.insertAdjacentHTML('afterend', keep.join(''));
+    // auras: move trait blocks marked as auras into the stat lines
+    root.querySelectorAll("p.flavor.alt").forEach(p=>{ });
+  }catch(e){ console.warn('old layout', e); }
+}
+
 // Trap lists ("✦ DC 8: ..."): the star stays at the margin and wrapped lines indent past it, as in the books.
 function hangBullets(root){
   root.querySelectorAll('.trapblockbody').forEach(sp=>{
@@ -578,7 +680,7 @@ function hangBullets(root){
 
 function renderInto(box, cat, id){
   const c=lib[cat], html=c.data[id];
-  if(html){ box.innerHTML=sanitize(html); statColumns(box); hangBullets(box); }
+  if(html){ box.innerHTML=sanitize(html); if(cat==='monster') oldMonsterLayout(box); statColumns(box); hangBullets(box); }
   else{
     box.replaceChildren();
     const n=document.createElement('div'); n.className='notice';
