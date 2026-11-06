@@ -96,6 +96,8 @@ tr.row.on{background:var(--sel)}
 .entry h1 .level{font-size:13px;font-weight:400;align-self:center;white-space:nowrap}
 .entry h3{font-size:16px;margin:16px 0 4px;border-bottom:1px solid var(--line)}
 .entry p.flavor{margin:0;padding:6px 12px;background:var(--panel);border-left:3px solid var(--line)}
+/* a monster's core stats (the block right under its name) stay plain; the shading starts with the first power, as in the books */
+.entry h1.monster + p.flavor:not(.alt){background:transparent;border-left-color:transparent}
 .entry p.powerstat{margin:0;padding:6px 12px;background:var(--stat)}
 .entry blockquote{margin:12px 0;padding:8px 14px;background:var(--stat);border-radius:4px}
 .entry p.publishedIn{color:var(--muted);font-size:13px;font-style:italic;margin-top:20px}
