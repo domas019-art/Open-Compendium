@@ -705,3 +705,6 @@ dialog.askdlg p{margin:0}
 .statcols{display:grid;grid-template-columns:repeat(3,minmax(0,11em));column-gap:1.2em}
 .statcols .full,.statcols .rest{grid-column:span 2}
 .statcols .full{grid-column:1/-1}
+.trapblockbody .bul,.trapblockbody .line{display:block}
+.trapblockbody .bul{padding-left:1.5em;text-indent:-1.5em}
+.trapblockbody .star{display:inline-block;width:1.5em;text-indent:0}

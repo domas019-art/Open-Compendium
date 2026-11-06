@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.71';
+const APP_VERSION = '0.99.72';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -564,9 +564,21 @@ function statColumns(root){
   });
 }
 
+// Trap lists ("✦ DC 8: ..."): the star stays at the margin and wrapped lines indent past it, as in the books.
+function hangBullets(root){
+  root.querySelectorAll('.trapblockbody').forEach(sp=>{
+    if(!sp.innerHTML.includes('✦')) return;
+    const lines=sp.innerHTML.split(/<br\s*\/?>/i).filter(x=>x.trim());
+    sp.innerHTML=lines.map(x=>{
+      const m=x.match(/^(?:\s|&nbsp;)*✦(?:\s|&nbsp;)*/);
+      return m ? '<span class="bul"><span class="star">✦</span>'+x.slice(m[0].length)+'</span>' : '<span class="line">'+x+'</span>';
+    }).join('');
+  });
+}
+
 function renderInto(box, cat, id){
   const c=lib[cat], html=c.data[id];
-  if(html){ box.innerHTML=sanitize(html); statColumns(box); }
+  if(html){ box.innerHTML=sanitize(html); statColumns(box); hangBullets(box); }
   else{
     box.replaceChildren();
     const n=document.createElement('div'); n.className='notice';
