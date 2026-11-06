@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.76';
+const APP_VERSION = '0.99.77';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -604,7 +604,7 @@ function oldMonsterLayout(root){
       if(pend.act===null){ /* trait */ }
       else{
         let a=pend.act;
-        if(pend.actWord) a={'immediate reaction':'immediate reaction','immediate interrupt':'immediate interrupt','opportunity action':'opportunity','free action':'free','no action':'','minor action':'minor','move action':'move','standard action':'standard'}[pend.actWord.toLowerCase()] ?? pend.actWord.toLowerCase();
+        if(pend.actWord) a={'immediate reaction':'immediate reaction','immediate interrupt':'immediate interrupt','opportunity action':'opportunity','free action':'free','no action':'no action','minor action':'minor','move action':'move','standard action':'standard'}[pend.actWord.toLowerCase()] ?? pend.actWord.toLowerCase();
         if(pend.trig){ let t=lcFirst(pend.trig.trim()).replace(/\.\s*$/,''); if(!/^(when|whenever|if|while|after|before|the first time|at the start|at the end)\b/i.test(t)) t='when '+t; a+=(a?', ':'')+t; }
         if(a) paren.push(a);
         if(pend.usage) paren.push(pend.usage);
