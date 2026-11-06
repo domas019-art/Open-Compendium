@@ -87,7 +87,7 @@ tr.row.on{background:var(--sel)}
 /* the newer trap and hazard layout (Dungeon Master's Kit and later) */
 .entry h1.thHead .thLevel{font-size:13px;font-weight:400;align-self:center;white-space:nowrap;text-align:right}
 .entry h1.thHead .thLevel .thXP{display:block}
-.entry h1.thHead .thSubHead{font-size:13px;font-weight:400;align-self:center}
+/* the type word (Trap, Hazard) matches the older trap layout: as big and bold as the name */
 .entry p.thStat,.entry span.thInit{display:block;margin:0;padding:2px 12px;background:var(--stat)}
 .entry h2.thHead{font-size:14px;margin:10px 0 0;padding:3px 12px;background:#88bb88;color:#1a1a1a}
 .entry p.th2{margin:6px 0 0;padding:2px 12px;background:var(--panel);border-left:3px solid #88bb88}
