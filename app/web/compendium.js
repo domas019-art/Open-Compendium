@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.70';
+const APP_VERSION = '0.99.71';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -544,9 +544,29 @@ function linkTerms(root, selfKey){
   }
 }
 
+// The ability scores and the Alignment / Languages line of a stat block: lined up in even columns, as in the books.
+const STAT_ROW=[/^<b>\s*Str\s*<\/b>.*<b>\s*Dex\s*<\/b>.*<b>\s*Wis\s*<\/b>/s, /^<b>\s*Con\s*<\/b>.*<b>\s*Int\s*<\/b>.*<b>\s*Cha\s*<\/b>/s,
+                /^<b>\s*Alignment\s*<\/b>.*<b>\s*Languages\s*<\/b>/s];
+function statColumns(root){
+  root.querySelectorAll('p').forEach(p=>{
+    const segs=p.innerHTML.split(/<br\s*\/?>/i).map(x=>x.trim());
+    if(!segs.some(x=>STAT_ROW.some(r=>r.test(x)))) return;
+    const g=document.createElement('div'); g.className='statcols';
+    for(const seg of segs){
+      if(!seg) continue;
+      if(STAT_ROW.some(r=>r.test(seg))){
+        // one cell per bold label: Str | Dex | Wis, or Alignment | Languages (the last spans the rest of the row)
+        const parts=seg.split(/(?=<b>\s*(?:Str|Dex|Wis|Con|Int|Cha|Alignment|Languages)\s*<\/b>)/);
+        parts.forEach((x,i)=>{ const d=document.createElement('span'); d.innerHTML=x.trim(); if(parts.length===2 && i===1) d.className='rest'; g.append(d); });
+      } else { const d=document.createElement('span'); d.className='full'; d.innerHTML=seg; g.append(d); }
+    }
+    p.replaceChildren(g);
+  });
+}
+
 function renderInto(box, cat, id){
   const c=lib[cat], html=c.data[id];
-  if(html){ box.innerHTML=sanitize(html); }
+  if(html){ box.innerHTML=sanitize(html); statColumns(box); }
   else{
     box.replaceChildren();
     const n=document.createElement('div'); n.className='notice';
