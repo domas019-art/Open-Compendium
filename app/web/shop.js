@@ -18,12 +18,11 @@ const MIT_CAT={'Armor':'Magic Armor','Weapon':'Magic Weapons','Ki Focus':'Ki Foc
   'Whetstones':'Whetstones','Consumable':'Consumables','Other Consumable':'Consumables','Soulfang':'Soulfangs','Alchemical':'Alchemical Items',
   'Artifact':'Artifacts','Intelligent Item':'Intelligent Items','Mount Slot Item':'Mount Slot Items','Companion Slot Item':'Companion Slot Items','Familiar Slot Item':'Familiar Slot Items'};
 const BOON_TYPES=/Boon|Gift|Blessing|Training|Talent|Mystery|Secret|Brand|Echo of Power|Alternative Reward/;
-// price of a typical magic item of each level; used for starting money above 1st level
-const ITEM_VALUE=[0,360,520,680,840,1000,1800,2600,3400,4200,5000,9000,13000,17000,21000,25000,45000,65000,85000,105000,125000,
-  225000,325000,425000,525000,625000,1125000,1625000,2125000,2625000,3125000];
+// price of a typical magic item of each level (core library); used for starting money above 1st level
+let ITEM_VALUE=[], START_GP=0;
 // Starting money, as the original builder gives it: 100 gp at 1st level; above that, the price of a magic item one level lower.
 // (A character made above 1st level also gets three magic items, of levels +1, same and -1: that's what Auto Add gives.)
-function startingMoney(L){ return L<=1 ? 100*100 : ITEM_VALUE[Math.max(1,L-1)]*100; }
+function startingMoney(L){ return L<=1 ? START_GP*100 : (ITEM_VALUE[Math.max(1,L-1)]||0)*100; }
 
 function levelMoney(L){ return startingMoney(L); }
 /* coins: the character keeps astral diamonds, platinum, gold, silver and copper separately, carried and banked */

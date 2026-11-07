@@ -21,10 +21,12 @@ mkdir -p resources/app && cp -r "$ROOT/app/." resources/app/ && cp "$ROOT/tools/
 sed "s/VERSION/${VER%.0}/" "$ROOT/dist-files/README.txt" > README.txt
 mkdir -p Characters/Deleted Characters/Killed Data "Libraries/Compendium" "Libraries/Character Builder" portraits
 cp "$ROOT/dist-files/README - portraits.txt" portraits/
+cp "$ROOT/dist-files/Libraries/open-compendium-core.part" Libraries/
 cd ..
 rm -f "Open-Compendium-$VER.zip" "Open-Compendium-$VER-update.zip"
 zip -qr "Open-Compendium-$VER.zip" "Open Compendium"
 mkdir -p upd/resources && cp -r "Open Compendium/resources/app" upd/resources/ && cp "Open Compendium/README.txt" upd/
+mkdir -p upd/Libraries && cp "Open Compendium/Libraries/open-compendium-core.part" upd/Libraries/
 sed "s/VERSION/${VER%.0}/g" "$ROOT/dist-files/HOW TO UPDATE.txt" > "upd/HOW TO UPDATE.txt"
 (cd upd && zip -qr "../Open-Compendium-$VER-update.zip" .)
 rm -rf upd

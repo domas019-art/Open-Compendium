@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.86';
+const APP_VERSION = '1.0';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -43,7 +43,7 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=10;   // raised when the way the library is read changes, so it is read again
+const LIBRARY_READER=11;   // raised when the way the library is read changes, so it is read again
 async function loadLibrary(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
   list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
@@ -51,6 +51,7 @@ async function loadLibrary(){
   if(await loadKey('libsig')===sig){
     const saved=await restore(); if(saved && Object.keys(saved).length) lib=saved;
     const raw=await loadKey('rules'); if(raw){ try{ RULES.use(raw); }catch(e){ console.warn(e); } }
+    const core=await loadKey('core'); if(core) applyCore(core);
     if(Object.keys(lib).length || RULES.db || !list.length) return;
   }
   await wipe(); lib={};
@@ -74,6 +75,13 @@ async function readLibrary(list){
     const t=await text(f); if(!/<D20Rules/.test(t.slice(0,400))) continue;
     try{ RULES.load(t); merged=f; break; }catch(e){ console.warn('rules skipped',f.p,e); }
   }
+  // the core library (open-compendium-core.part): the rules and lists the program itself needs (ability arrays,
+  // combat actions, conditions, book names...). It is read on its own, not as part of the Character Builder rules.
+  const isCore=f=>/^open-compendium-core\.part$/i.test(base(f));
+  let core=[];
+  for(const f of list.filter(isCore)){ try{ core=core.concat(RULES.parse(await text(f),true)); }catch(e){ console.warn('core library skipped',f.p,e); } }
+  applyCore(core); await saveKey('core',core);
+  list=list.filter(f=>!isCore(f));
   const ours=f=>/open-compendium/i.test(base(f));
   // a .part is read when it is ours or changed after the merged file was made (older ones are already inside it).
   // So whenever the merged file is rewritten, a part that is not yet inside it must be saved again after it.
@@ -346,7 +354,7 @@ function visibleRows(){
 
 /* ---------- source books ---------- */
 // Full names, taken from the "Published in ..." lines of the entries themselves.
-const BOOK_NAMES = {"AV":"Adventurer's Vault","DSCS":"Dark Sun Campaign Setting","PHB":"Player's Handbook","PHB2":"Player's Handbook 2","EPG":"Eberron Player's Guide","AV2":"Adventurer's Vault 2","MME":"Mordenkainen's Magnificent Emporium","MotP":"Manual of the Planes","PHB3":"Player's Handbook 3","PsP":"Psionic Power","E1":"E1 Death's Reach","TPB":"The Plane Below","TS":"The Shadowfell","HotEC":"Heroes of the Elemental Chaos","DMG":"Dungeon Master's Guide","PHR:T":"Player's Handbook Races: Tiefling","HS1":"HS1 The Slaying Stone","FRPG":"Forgotten Realms Player's Guide","PP":"Primal Power","PHR:D":"Player's Handbook Races: Dragonborn","DP":"Divine Power","AP":"Arcane Power","MP2":"Martial Power 2","NCS":"Neverwinter Campaign Setting","DSH":"Into the Unknown: The Dungeon Survival Handbook","HotF":"Heroes of the Feywild","HotFK":"Heroes of the Forgotten Kingdoms","HotFL":"Heroes of the Fallen Lands","HoS":"Heroes of Shadow","MP":"Martial Power","FRCG":"Forgotten Realms Campaign Guide","MV:TttNV":"Monster Vault: Threats to the Nentir Vale","DMG2":"Dungeon Master's Guide 2","ECS":"Eberron Campaign Setting","MM2":"Monster Manual 2","MV":"Monster Vault","CC":"Class Compendium","MM":"Monster Manual","RC":"Rules Compendium","P2":"P2 Demon Queen Enclave","H1":"H1 Keep on the Shadowfell","P3":"P3 Assault on Nightwyrm Fortress","DMK":"Dungeon Master's Kit","Draco: Metallic":"Draconomicon: Metallic Dragons","FR1":"FR1 Scepter Tower of Spellgard","E2":"E2 Kingdom of the Ghouls","P1":"P1 King of the Trollhaunt Warrens","Draco: Chromatic":"Draconomicon: Chromatic Dragons","E3":"E3 Prince of Undeath","H3":"H3 Pyramid of Shadows","MM3":"Monster Manual 3","H2":"H2 Thunderspire Labyrinth","HS2":"HS2 Orcs of Stonefang Pass","DD":"Dungeon Delve","DoE":"Dragons of Eberron","DSCC":"Dark Sun Creature Catalog","TPA":"The Plane Above","PHH:S1":"PH Heroes: Series 1","PHH:S2":"PH Heroes: Series 2","Red Box":"Red Box Starter Set"};
+let BOOK_NAMES = {};          // code -> full book name, from the core library
 const MAG_RE = /^(Dra|Dun)(\d+|Annual)$/;
 const isMagazine = code => MAG_RE.test(code);
 function bookLabel(code){
@@ -583,6 +591,80 @@ function linkTerms(root, selfKey){
 // The ability scores and the Alignment / Languages line of a stat block: lined up in even columns, as in the books.
 const STAT_ROW=[/^<b>\s*Str\s*<\/b>.*<b>\s*Dex\s*<\/b>.*<b>\s*Wis\s*<\/b>/s, /^<b>\s*Con\s*<\/b>.*<b>\s*Int\s*<\/b>.*<b>\s*Cha\s*<\/b>/s,
                 /^<b>\s*Alignment\s*<\/b>.*<b>\s*Languages\s*<\/b>/s];
+/* ---------- monsters in one layout ----------
+   The compendium has two monster layouts: the older one (2008-2010: "(standard; at-will)" after each power, the
+   powers in one list) and the newer one (Monster Vault on: the powers under Traits, Standard Actions, Move
+   Actions... and the core stats in a table). Both are shown alike: the powers grouped under their action type
+   as in the newer layout, the core stats as plain lines as in the older one. The entries themselves are not
+   changed. An older power loses the action word its heading already gives ("(standard; at-will)" becomes
+   "(at-will)"), and the newer monsters' core stats follow the older order (Initiative and Senses first, Speed last). */
+const GAP='<span class="gap"></span>';
+const ACTION_GROUPS=['Traits','Standard Actions','Move Actions','Minor Actions','Free Actions','Triggered Actions'];
+function unifyMonster(box){
+  const h1=box.querySelector('h1.monster'); if(!h1) return;
+  const tbl=box.querySelector('table.bodytable');
+  const tidy=s=>s.replace(/(?:\s|&nbsp;){3,}/g,GAP);
+  if(tbl){
+    // the newer layout: the stats table becomes lines
+    const rows=[...tbl.rows].map(tr=>[...tr.cells].map(td=>td.innerHTML.trim()).filter(Boolean));
+    const pick=re=>{ for(const r of rows) for(let i=0;i<r.length;i++) if(re.test(r[i])) return r.splice(i,1)[0]; return ''; };
+    const hp=pick(/^<b>HP<\/b>/), init=pick(/^<b>Initiative<\/b>/), ac=pick(/^<b>AC<\/b>/), perc=pick(/^<b>Perception<\/b>/), speed=pick(/^<b>Speed<\/b>/);
+    // the third row's right cell is the senses (Darkvision...), once Speed is taken out
+    const senses=rows[2] && rows[2].length===1 && !/^<b>/.test(rows[2][0]) ? rows[2].splice(0,1)[0].replace(/^[A-Z](?=[a-z])/,c=>c.toLowerCase()) : '';
+    const sensesLine=perc ? '<b>Senses</b> '+perc.replace(/^<b>Perception<\/b>\s*/,'Perception ')+(senses?'; '+senses:'') : (senses?'<b>Senses</b> '+senses:'');
+    const lines=[[init,sensesLine].filter(Boolean).join(GAP), hp, ac, ...rows.filter(r=>r.length).map(r=>r.join(GAP)), speed].filter(Boolean);
+    const p=document.createElement('p'); p.className='flavor'; p.innerHTML=lines.join('<br>');
+    tbl.replaceWith(p);
+    return;
+  }
+  if(box.querySelector(':scope > h2')) return;          // already grouped under headings
+  // the older layout: core stats as they are (wide spaces become one gap); auras go to Traits
+  const stat=h1.nextElementSibling && h1.nextElementSibling.matches('p.flavor:not(.alt)') ? h1.nextElementSibling : null;
+  const auras=[];
+  if(stat){
+    const segs=stat.innerHTML.split(/<br\s*\/?>/i).map(x=>x.trim()).filter(Boolean), keep=[];
+    for(const s of segs){
+      const m=/^<b>([^<]+)<\/b>\s*((?:\([^)]*\)\s*)?)aura\s*(\d+)(.*)$/i.exec(s);
+      if(m && !/^(Initiative|HP|AC|Speed|Senses)$/i.test(m[1].trim())){
+        const rest=m[4].replace(/^\s*[;,:]?\s*/,'').replace(/^[a-z]/,c=>c.toUpperCase());
+        auras.push(['☼ <b>'+m[1].trim()+'</b> '+(m[2]?m[2].trim()+' ':'')+'✦ Aura '+m[3], rest]);
+      } else keep.push(tidy(s));
+    }
+    stat.innerHTML=keep.join('<br>');
+  }
+  // powers: a heading line (p.flavor.alt) and its text lines, up to the Alignment / ability scores block
+  const groups={}; ACTION_GROUPS.forEach(g=>groups[g]=[]);
+  const heads=[...box.querySelectorAll(':scope > p.flavor.alt')].filter(p=>!/<b>\s*(Alignment|Str|Skills|Languages|Equipment)\b/.test(p.innerHTML));
+  if(!heads.length && !auras.length) return;
+  for(const [hd,txt] of auras){ const a=document.createElement('p'); a.className='flavor alt'; a.innerHTML=hd; const b=document.createElement('p'); b.className='flavorIndent'; b.innerHTML=txt; groups.Traits.push([a,b]); }
+  for(const hp of heads){
+    const body=[]; let n=hp.nextElementSibling;
+    while(n && n.matches('p.flavorIndent')){ body.push(n); n=n.nextElementSibling; }
+    const m=/<\/b>\s*\(([^)<]*)(\)|$|(?=<))/.exec(hp.innerHTML), use=m?m[1].trim().toLowerCase():'';   // a few lack the closing bracket
+    const first=use.split(/[;,]/)[0].trim();
+    let g='Traits';
+    if(/^standard\b/.test(first)) g='Standard Actions';
+    else if(/^move\b/.test(first)) g='Move Actions';
+    else if(/^minor\b/.test(first)) g='Minor Actions';
+    else if(/^free\b/.test(first)) g='Free Actions';
+    else if(/^(immediate|opportunity|no action|when|while|reaction|interrupt)/.test(first) || /\bwhen\b/.test(first)) g='Triggered Actions';
+    if(m && /^(standard|move|minor|free)\b/.test(first)){
+      // the heading already says the action: "(standard; at-will)" -> "(at-will)", "(minor 1/round; at-will)" -> "(1/round; at-will)"
+      let u=m[1].trim().replace(/^(standard|move|minor|free)(\s+action)?\b\s*/i,'').replace(/^[;,]\s*/,'');
+      hp.innerHTML=hp.innerHTML.replace(m[0], u ? '</b> ('+u+')' : '</b>');
+    } else if(m && !m[2]) hp.innerHTML=hp.innerHTML.replace(m[0], m[0].trimEnd()+')');   // close the bracket the entry forgot
+    groups[g].push([hp,...body]);
+  }
+  // put them back in order, each group under its heading, where the first power was
+  const anchor=document.createComment('powers');
+  if(heads[0]) heads[0].before(anchor); else (stat||h1).after(anchor);
+  const frag=document.createDocumentFragment();
+  for(const g of ACTION_GROUPS){ if(!groups[g].length) continue;
+    const h=document.createElement('h2'); h.textContent=g; frag.append(h);
+    for(const nodes of groups[g]) frag.append(...nodes); }
+  anchor.replaceWith(frag);
+}
+
 function statColumns(root){
   root.querySelectorAll('p').forEach(p=>{
     const segs=p.innerHTML.split(/<br\s*\/?>/i).map(x=>x.trim());
@@ -614,7 +696,8 @@ function hangBullets(root){
 
 function renderInto(box, cat, id){
   const c=lib[cat], html=c.data[id];
-  if(html){ box.innerHTML=sanitize(html); statColumns(box); hangBullets(box); }
+  box.dataset.cat=cat;                                   // lets the style sheet colour by category (companions green, like monsters)
+  if(html){ box.innerHTML=sanitize(html); if(cat==='monster') unifyMonster(box); statColumns(box); hangBullets(box); }
   else{
     box.replaceChildren();
     const n=document.createElement('div'); n.className='notice';

@@ -7,6 +7,11 @@ moved or copied anywhere (another drive, a flash drive) and run from there.
 Your folders (next to the program)
   Libraries\Compendium          the compendium: armor, class, power, ... folders
   Libraries\Character Builder   combined.dnd40.merged.xml and the .part files
+  Libraries\open-compendium-core.part
+                                the core library that comes with the program: point buy and
+                                ability arrays, Charge, combat actions, conditions, book names
+                                and other lists the program needs. It has no book text and
+                                may be shared. Updates replace it.
   portraits\                    pictures; any picture put here shows up in the Portrait tab
   Characters\                   your characters, one file each (saved automatically).
                                 Each folder inside is a character folder in the program
@@ -18,8 +23,8 @@ Your folders (next to the program)
                                 program reads the Libraries folder again and rebuilds it.
 
 The library is read once and remembered. When files in Libraries change, the program reads
-them again (at the next start, or straight away from the bar it shows). Keep the library and
-the Data folder private: they contain the game content.
+them again (at the next start, or straight away from the bar it shows). Keep the library (apart from
+the core library) and the Data folder private: they contain the game content.
 
 The program never connects to the internet; every web address is refused.
 

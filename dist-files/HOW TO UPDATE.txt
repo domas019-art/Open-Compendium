@@ -6,5 +6,6 @@ Open Compendium VERSION update
    When Windows asks, choose "Replace the files in the destination".
 3. Start the program. The version at the foot of the Start page should say VERSION.
 
-Only the program's own files (resources\app and README.txt) are replaced.
-Your characters, pictures, library and settings are not touched.
+Only the program's own files (resources\app, README.txt and Libraries\open-compendium-core.part,
+the core library that comes with the program) are replaced.
+Your characters, pictures, own library files and settings are not touched.

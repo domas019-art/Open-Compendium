@@ -7,31 +7,16 @@
    ===================================================================== */
 
 const SHEET_TABS=[['combat','Powers & Combat'],['skills','Skills & Abilities'],['features','Features & Feats'],['gear','Inventory'],['notes','Companions & Notes'],['mounts','Mounts']];
-const CONDITIONS=['Blinded','Dazed','Deafened','Dominated','Dying','Grabbed','Helpless','Immobilized','Insubstantial','Invisible','Marked','Petrified','Prone','Restrained','Slowed','Stunned','Surprised','Unconscious','Weakened','Ongoing damage'];
-const DURATIONS=['save ends','end of your next turn','start of your next turn','end of the encounter','until removed'];
+let CONDITIONS=[];
+let DURATIONS=[];
 // what an effect can change, and the numbers it changes
 const EFFECT_STATS=[['AC',['AC']],['Fortitude',['Fortitude Defense']],['Reflex',['Reflex Defense']],['Will',['Will Defense']],
   ['All defenses',['AC','Fortitude Defense','Reflex Defense','Will Defense']],['Attack rolls',['attack rolls']],['Damage rolls',['damage rolls']],
   ['Speed',['Speed']],['Initiative',['Initiative']],['Saving throws',['Saving Throws']],['All skills',SKILLS],...SKILLS.map(k=>[k,[k]])];
 const DEF_NAMES=[['AC','AC'],['Fortitude Defense','Fort'],['Reflex Defense','Ref'],['Will Defense','Will']];
-// what anyone can do in combat (Player's Handbook, "Actions in Combat")
-const COMBAT_ACTIONS=[
-  ['Standard actions',[['Basic attack','a melee or ranged basic attack'],['Charge','move your speed (at least 2 squares) and make a melee basic attack or bull rush, +1 to attack'],
-    ['Bull rush','Strength vs. Fortitude: push the target 1 square and shift into its space'],['Grab','Strength vs. Reflex: the target is immobilized until it escapes'],
-    ['Second wind','spend a healing surge, +2 to all defenses until the start of your next turn (once per encounter)'],['Total defense','+2 to all defenses until the start of your next turn'],
-    ['Aid another','DC 10 check: an ally gets +2 to an attack roll or a skill check, or +2 to a defense against one attack'],['Coup de grace','attack a helpless adjacent enemy; a hit is a critical hit'],
-    ['Ready an action','choose an action and a trigger; take it as an immediate reaction'],['Administer a potion','help an unconscious ally drink a potion']]],
-  ['Move actions',[['Walk','move up to your speed'],['Shift','move 1 square without provoking opportunity attacks'],['Run','speed + 2; −5 to attacks and you grant combat advantage until your next turn'],
-    ['Stand up','stand up from prone'],['Crawl','move half your speed while prone'],['Squeeze','move half your speed through a narrow space; −5 to attacks, grant combat advantage'],
-    ['Escape','Acrobatics vs. Reflex or Athletics vs. Fortitude to end a grab; shift 1 square on a success']]],
-  ['Minor actions',[['Draw or sheathe a weapon',''],['Drink a potion',''],['Pick up an item',''],['Retrieve or stow an item',''],['Open or close a door',''],['Drop prone',''],['Load a crossbow',''],['Sustain a power','powers with “Sustain Minor”']]],
-  ['Free actions',[['Spend an action point','an extra action this turn (once per encounter, not in a surprise round)'],['Talk','a few sentences'],['Drop an item',''],['End a grab','']]],
-  ['Immediate and opportunity actions',[['Opportunity attack','a melee basic attack when an adjacent enemy moves away or makes a ranged or area attack (one per enemy turn)'],['Readied action','the action you readied, when its trigger happens'],['Immediate interrupt or reaction','a power with that action type (one per round)']]],
-].map(([t,l])=>[t,l.map(([n,d])=>[n,d||''])]);
-// charging is a basic action everyone has: it is shown with the at-will attacks
-const CHARGE={id:'charge', name:'Charge', type:'Power', spec:{'Power Usage':'At-Will','Action Type':'Standard action','Attack Type':'Melee (after moving)','Display':'Basic Attack'}, rules:[],
-  text:'Standard action. Move up to your speed, at least 2 squares from where you started, to the nearest square from which you can attack the target.\nThen make a melee basic attack or a bull rush with a +1 bonus to the attack roll.\nThe movement provokes opportunity attacks as usual. After a charge you can\'t take any further actions this turn, unless you spend an action point.'};
-const UNARMED={id:'unarmed', name:'Unarmed', type:'Weapon', spec:{'Damage':'1d4','Group':'Unarmed','Weapon Category':'Unarmed Melee','Proficiency Bonus':''}, rules:[]};
+// what anyone can do in combat, Charge and Unarmed: from the core library (applyCore)
+let COMBAT_ACTIONS=[], CHARGE=null, UNARMED=null;
+// charging is a basic action everyone has: it is shown with the at-will attacks (CHARGE, from the core library)
 
 Object.assign(Builder,{
   play(){
@@ -245,7 +230,6 @@ Object.assign(Builder,{
     }
     return parts;
   },
-  activeText(p){ return this.activeClauses(p).join(' '); },
   // a benefit that only counts sometimes ("while you have combat advantage", "made to climb", "during your first turn")
   isConditional(c){ return /\b(while|when|whenever|if|during|made to|that you provoke|against (?:it|that|an?|the|opportunity)|first turn|instead)\b/i.test(c); },
   // the main weapon's damage dice, for "1[W]"
@@ -407,7 +391,7 @@ Object.assign(Builder,{
       ['Daily',p=>/daily/i.test(sp(p,'Power Usage'))&&!util(p),'u2'],['Utility',util,'u3']];
     const seen=new Set();
     const columns=cols.map(([t,f,cls])=>{ const list=all.filter(p=>!seen.has(p.id)&&f(p)); list.forEach(p=>seen.add(p.id));
-      if(t==='At-will') list.splice(list.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
+      if(t==='At-will' && CHARGE) list.splice(list.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
       return el('div',{class:'pcol '+cls,dataset:{role:{'At-will':'atwill','Encounter':'encounter','Daily':'daily','Utility':'utility'}[t]}}, el('h3',{text:t+' '}, el('small',{class:'muted',text:list.length})), this.powerList(list)); });
     if(petList.length) columns.splice(4,0,el('div',{class:'pcol up',dataset:{role:'pets'}}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:[...pets.map(x=>x.name),...fams.map(f=>f.name)].join(' · ')})), this.powerList(petList)));
     const mounts=this.mounts();
@@ -471,7 +455,6 @@ Object.assign(Builder,{
   // power cards in a column: name, action and range, the worked-out numbers, and a Use button
   // is the action this power takes still available this turn? (standard, move, minor, immediate)
   actionKey(t){ return /standard/i.test(t)?'standard':/move/i.test(t)?'move':/minor/i.test(t)?'minor':/immediate/i.test(t)?'immediate':''; },
-  actionLeft(t){ const k=this.actionKey(t); if(!k) return true; const A=this.actions(); return (A[k]||0) < 1+(k==='standard'?(A.extra||0):0); },
   powerList(list){
     const P=this.play(), box=el('div',{class:'prows'});
     for(const p of list){
@@ -541,7 +524,7 @@ Object.assign(Builder,{
   powerDetail(box,p,calc){
     const card=el('div',{class:'pcard entry'});
     if(p.virtual) card.append(el('h1',{class:p.aura?'player':'atwillpower'},p.name,el('span',{class:'level',text:p.pet.name+(p.pet.name!==p.pet.kind?' ('+p.pet.kind+')':'')})), ...String(p.text).split('\n').map(t=>el('p',{text:t})));
-    else if(p===CHARGE) card.append(el('h1',{class:'atwillpower'},'Charge',el('span',{class:'level',text:'Basic action'})), ...CHARGE.text.split('\n').map(t=>el('p',{text:t})));
+    else if(p===CHARGE) card.append(el('h1',{class:'atwillpower'},CHARGE.name,el('span',{class:'level',text:'Basic action'})), ...CHARGE.text.split('\n').map(t=>el('p',{text:t})));
     else {
       this.renderElement(card,p.id);
       const others=new Set(this.sheetPowers().filter(x=>x!==p).map(x=>x.name.toLowerCase()));
@@ -974,7 +957,7 @@ Object.assign(Builder,{
       }
       if(!rows.length){
         for(const {base,magic} of ws) rows.push({...one(base,magic), weapon:magic?itemName({ids:[base.id,magic.id]}):base.name});
-        if(kind==='melee' || kind==='both') rows.push(one(UNARMED,null));
+        if((kind==='melee' || kind==='both') && UNARMED) rows.push(one(UNARMED,null));
       }
     } else {
       // implement or no keyword: one line; an implement's enhancement counts for implement powers

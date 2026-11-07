@@ -16,3 +16,7 @@ out/
 *.dll
 *.pak
 node_modules/
+
+# the core library ships with the program and is public (no book text)
+!dist-files/Libraries/
+!dist-files/Libraries/open-compendium-core.part

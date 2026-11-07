@@ -96,27 +96,44 @@ const RULES = {
 
 const ABILITIES=['Strength','Constitution','Dexterity','Intelligence','Wisdom','Charisma'];
 const ABIL_SHORT={str:'Strength',con:'Constitution',dex:'Dexterity',int:'Intelligence',wis:'Wisdom',cha:'Charisma'};
-// The original builder's "Optional Details" (check all that apply)
-const OPTIONAL_DETAILS=[
-  {key:'inherent', id:'ID_INTERNAL_INTERNAL_INHERENT_BONUSES', name:'Inherent Bonuses', text:'Your character gets inherent enhancement bonuses to attacks, damage and defenses as you level, instead of relying on magic items.'},
-  // the "feat tax" fix: the two consolidated feats (Essentials era) that keep attacks and defenses up with the
-  // monster math, given for free instead of costing two feat choices
-  {key:'featTax', ids:['ID_FMP_FEAT_2785','ID_FMP_FEAT_3143'], name:'Expertise and Defenses for free', text:'The common fix for the later 4e math: every character gets Versatile Expertise and Improved Defenses without spending feats on them (+1 to attacks and to Fortitude, Reflex and Will, rising to +2 at 11th and +3 at 21st level).'},
-  {key:'darksun', id:'ID_INTERNAL_INTERNAL_DARK_SUN', name:'Dark Sun', text:'A Dark Sun campaign on the continent of Athas. Adds a wild talent choice.'},
-  {key:'spellscar', id:'ID_FMP_PSEUDO_CLASS_216', name:'Spellscarred', text:'Forgotten Realms characters can optionally start with a spellscar.'},
-  {key:'harper', id:'ID_INTERNAL_INTERNAL_HARPER', name:'Harper', text:'Forgotten Realms characters who gain membership in the Harpers.'},
-  {key:'vadalis', id:'ID_INTERNAL_INTERNAL_HOUSE_VADALIS', name:'House Vadalis', text:'Eberron characters who are members of House Vadalis.'},
-  {key:'smoke', id:'ID_INTERNAL_INTERNAL_CIRCLE_OF_SMOKE_AND_WHISPERS', name:'Circle of Smoke and Whispers', text:'Membership in the Circle of Smoke and Whispers.'},
-  // house rules (not from a book): marked as homebrew
-  {key:'intimHighest', id:'', homebrew:true, name:'Intimidate with your best ability (house rule)', text:'Intimidate uses your highest ability modifier instead of Charisma.'},
-  {key:'freeBeasts', id:'', homebrew:true, name:'Free-acting companions (house rule)', text:'Your companions\' basic attacks don\'t use your actions, and attack powers with the Beast keyword can be used by any of your beast companions.'},
-];
+// The original builder's "Optional Details" (check all that apply), from the core library:
+// {key, id or ids, name, text, homebrew}. The key is what the program acts on (inherent, featTax, darksun...).
+let OPTIONAL_DETAILS=[];
+
+/* ---------- the core library (open-compendium-core.part) ----------
+   Rules and lists the program needs that are not in the book libraries: point buy and ability arrays, the XP and
+   magic item value tables, Charge and Unarmed, combat actions, conditions, durations, Optional Details, the full
+   names of the compendium's book codes and renamed builder books. Without the file these are simply empty. */
+const CORE_FALLBACK_XP=[];
+function applyCore(list){
+  list=Array.isArray(list)?list:[];
+  const of=type=>list.filter(o=>o.type===type), sp2=(o,k)=>(o.spec||{})[k]||'';
+  const nums=s=>String(s||'').split(',').map(x=>+x.trim()).filter(x=>!isNaN(x));
+  const pb=list.find(o=>o.id==='ID_OCC_POINT_BUY');
+  POINT_COST={}; for(const pr of String(sp2(pb||{},'Costs')).split(',')){ const [a,b]=pr.split(':').map(x=>+x); if(!isNaN(a)&&!isNaN(b)) POINT_COST[a]=b; }
+  POINT_BUDGET=+sp2(pb||{},'Points')||0;
+  const arrs=of('Ability Array');
+  ARRAYS=arrs.map(o=>nums(sp2(o,'Scores'))); STANDARD_IDX=Math.max(0,arrs.findIndex(o=>/^yes$/i.test(sp2(o,'Standard'))));
+  STANDARD_ARRAY=ARRAYS[STANDARD_IDX]||[];
+  const xp=list.find(o=>o.id==='ID_OCC_XP'); CORE_FALLBACK_XP.length=0; if(xp) CORE_FALLBACK_XP.push(0,...nums(sp2(xp,'Values')));
+  START_GP=+sp2(list.find(o=>o.id==='ID_OCC_START_MONEY')||{},'Gold')||0;
+  const iv=list.find(o=>o.id==='ID_OCC_ITEM_VALUE'); ITEM_VALUE=iv?[0,...nums(sp2(iv,'Values'))]:[];
+  const ch=list.find(o=>o.id==='ID_OCC_CHARGE'); CHARGE=ch?{id:'charge', name:ch.name, type:'Power', spec:{...ch.spec}, rules:[], text:ch.text||''}:null;
+  const un=list.find(o=>o.id==='ID_OCC_UNARMED'); UNARMED=un?{id:'unarmed', name:un.name, type:'Weapon', spec:{'Proficiency Bonus':'',...un.spec}, rules:[]}:null;
+  const groups=[]; for(const o of of('Combat Action')){ const g=sp2(o,'Group')||'Other actions'; let G=groups.find(x=>x[0]===g); if(!G) groups.push(G=[g,[]]); G[1].push([o.name,o.text||'']); }
+  COMBAT_ACTIONS=groups;
+  CONDITIONS=of('Condition').map(o=>o.name); DURATIONS=of('Effect Duration').map(o=>o.name);
+  OPTIONAL_DETAILS=of('Optional Detail').map(o=>{ const ids=String(sp2(o,'IDs')).split(',').map(x=>x.trim()).filter(Boolean);
+    return {key:sp2(o,'Key'), id:ids.length===1?ids[0]:'', ids:ids.length>1?ids:undefined, name:o.name, text:o.text||'', homebrew:/^yes$/i.test(sp2(o,'Homebrew'))}; }).filter(o=>o.key);
+  BOOK_NAMES={}; for(const o of of('Book')) if(sp2(o,'Code')) BOOK_NAMES[sp2(o,'Code')]=o.name;
+  RENAMED_BOOKS={}; for(const o of of('Renamed Book')) if(sp2(o,'Old Name')) RENAMED_BOOKS[sp2(o,'Old Name')]=o.name;
+}
 
 // experience needed to reach each level (from the data; the standard table if missing)
 function xpTable(){
   const t=[0,0]; let sum=0;
   for(let n=1;n<30;n++){ const e=RULES.db?.els['ID_INTERNAL_LEVEL_'+n]; const v=+(e?.spec['XP Needed']||0); sum+=v; t[n+1]=sum; }
-  return sum>0 ? t : [0,0,1000,2250,3750,5500,7500,10000,13000,16500,20500,26000,32000,39000,47000,57000,69000,83000,99000,119000,143000,175000,210000,255000,310000,375000,450000,550000,675000,825000,1000000];
+  return sum>0 || !CORE_FALLBACK_XP.length ? t : CORE_FALLBACK_XP;
 }
 function levelForXp(xp){ const t=xpTable(); let l=1; for(let n=2;n<=30;n++) if(xp>=t[n]) l=n; return l; }
 const SKILLS=['Acrobatics','Arcana','Athletics','Bluff','Diplomacy','Dungeoneering','Endurance','Heal','History','Insight','Intimidate','Nature','Perception','Religion','Stealth','Streetwise','Thievery'];

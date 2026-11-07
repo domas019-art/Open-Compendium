@@ -5,11 +5,9 @@
    Uses rules.js for the logic and compendium.js for showing entries.
    ===================================================================== */
 
-const POINT_COST={10:0,11:1,12:2,13:3,14:5,15:7,16:9,17:12,18:16};
-const STANDARD_ARRAY=[16,14,13,12,11,10];
-const ARRAYS=[[18,14,11,10,10,8],[18,13,13,10,10,8],[18,13,11,10,10,10],[17,16,11,10,10,8],[17,15,13,10,10,8],
-  [17,14,12,11,10,8],[16,16,13,11,10,8],[16,16,12,12,11,8],[16,14,14,11,11,8],[16,14,13,12,11,10]];
-const curArray=ch=>ARRAYS[ch.arrayIdx ?? 9] || STANDARD_ARRAY;
+// point buy and the ability arrays come from the core library (applyCore)
+let POINT_COST={}, POINT_BUDGET=0, STANDARD_ARRAY=[], ARRAYS=[], STANDARD_IDX=0;
+const curArray=ch=>ARRAYS[ch.arrayIdx ?? STANDARD_IDX] || STANDARD_ARRAY;
 const SECTIONS=[['start','Start'],['build','Build'],['shop','Shop'],['manage','Manage'],['sheet','Character Sheet']];
 const STEPS=[['class','Class'],['race','Race'],['background','Background'],['abilities','Ability Scores'],['skills','Skills'],['powers','Powers'],['feats','Feats']];
 const STEP_HAS_SHOWALL=new Set(['class','race','background','skills','powers','feats']);
@@ -24,8 +22,8 @@ const isInline=t=>INLINE_TYPES.has(t) || /^Ability Increase/.test(t);
 
 function newChar(){
   return {id:'c'+Date.now().toString(36), name:'New character', level:1, method:'array',
-          abilities:{Strength:16,Constitution:14,Dexterity:13,Intelligence:12,Wisdom:11,Charisma:10},
-          picks:{}, hb:{}, showAll:{}, extra:{}, campaign:lastCampaign(), xp:0, swaps:{}, details:{inherent:true, featTax:true}, items:[], equip:{}, money:10000, stored:0, rituals:[], formulas:[], practices:[],
+          abilities:Object.fromEntries(ABILITIES.map((a,i)=>[a,STANDARD_ARRAY[i]??10])),
+          picks:{}, hb:{}, showAll:{}, extra:{}, campaign:lastCampaign(), xp:0, swaps:{}, details:{inherent:true, featTax:true}, items:[], equip:{}, money:startingMoney(1), stored:0, rituals:[], formulas:[], practices:[],
           info:{player:(()=>{ try{ return localStorage.getItem('open-compendium-player')||''; }catch(e){ return ''; } })()}, journal:[], companionInfo:{}};
 }
 
@@ -190,7 +188,6 @@ const Builder={
     return src.some(x=>this._en.has(x));
   },
   // the book list in use: the open character's, or (with none open) the placeholder whose list new characters start with
-  camp(){ return this.ch.campaign; },
   saveCamp(){
     try{ localStorage.setItem(CAMPKEY,JSON.stringify(this.ch.campaign)); }catch(e){}
     this.changed();
@@ -760,17 +757,17 @@ const Builder={
   /* ---------- Ability scores ---------- */
   abilityProblem(){
     const ch=this.ch;
-    if(ch.method==='points'){ const r=pointBuy(ch.abilities); return r.bad || r.cost>22; }
+    if(ch.method==='points'){ const r=pointBuy(ch.abilities); return r.bad || r.cost>POINT_BUDGET; }
     if(ch.method==='array'){ const v=ABILITIES.map(a=>+ch.abilities[a]).sort((a,b)=>b-a); return v.join()!==curArray(ch).join(); }
     return false;
   },
   abilityCard(){
     const ch=this.ch, st=this.st, card=el('div',{class:'bcard'});
     const method=el('select',{'aria-label':'Ability score method'});
-    const cur=ch.method==='array' ? 'array'+(ch.arrayIdx??9) : ch.method;
+    const cur=ch.method==='array' ? 'array'+(ch.arrayIdx??STANDARD_IDX) : ch.method;
     const og=el('optgroup',{label:'Sample ability arrays'});
-    ARRAYS.forEach((arr,i)=>og.append(new Option(arr.join(', ')+(i===9?' (standard)':''),'array'+i,false,cur==='array'+i)));
-    method.append(og, new Option('Point buy (22 points)','points',false,cur==='points'), new Option('Enter scores (rolled or other)','manual',false,cur==='manual'));
+    ARRAYS.forEach((arr,i)=>og.append(new Option(arr.join(', ')+(i===STANDARD_IDX?' (standard)':''),'array'+i,false,cur==='array'+i)));
+    method.append(og, new Option(`Point buy (${POINT_BUDGET} points)`,'points',false,cur==='points'), new Option('Enter scores (rolled or other)','manual',false,cur==='manual'));
     method.onchange=()=>{
       const v=method.value;
       if(v.startsWith('array')){ ch.method='array'; ch.arrayIdx=+v.slice(5); curArray(ch).forEach((n,i)=>ch.abilities[ABILITIES[i]]=n); }
@@ -807,8 +804,8 @@ const Builder={
     card.append(this.stepHeader('abilities','Ability scores'), info, method, grid);
     if(ch.method==='points'){
       const r=pointBuy(ch.abilities);
-      card.append(el('p',{class: r.cost>22||r.bad ? 'warn' : 'muted',
-        text: r.bad ? 'Point buy: one score may be 8 or 9, the others must be 10–18.' : `Points spent: ${r.cost} of 22`}));
+      card.append(el('p',{class: r.cost>POINT_BUDGET||r.bad ? 'warn' : 'muted',
+        text: r.bad ? 'Point buy: one score may be 8 or 9, the others must be 10–18.' : `Points spent: ${r.cost} of ${POINT_BUDGET}`}));
     }
     card.append(el('p',{class:'muted small',text:'★ marks your class\'s key abilities. Bonus is what your race (and level increases) add; Final is the score you play with.'}));
     return card;
@@ -1366,13 +1363,7 @@ function compendiumRef(e){
 /* ---------- campaign helpers ---------- */
 const CAMPKEY='open-compendium-campaign';
 // books renamed in the builder library (0.99.69), so a saved book list keeps finding them
-const RENAMED_BOOKS={"Dungeon Survival Handbook":"Into the Unknown: The Dungeon Survival Handbook",
-  "Player Essentials: Heroes of the Fallen Lands":"Heroes of the Fallen Lands","Player Essentials: Heroes of the Forgotten Kingdoms":"Heroes of the Forgotten Kingdoms",
-  "Player Essentials: Heroes of Shadow":"Heroes of Shadow","Neverwinter Campaign Guide":"Neverwinter Campaign Setting","Player Essentials: Class Compendium":"Class Compendium",
-  "Dragon 427":"Dragon Magazine 427","The Plane Below: Secrets of the Elemental Chaos":"The Plane Below","Open Grave: Secrets of the Undead":"Open Grave",
-  "Thingamajigs of the Barrier Peaks (Dragon Magazine 410)":"Dragon Magazine 410","Dungeon Magazine 405":"Dungeon Magazine 205",
-  "Eberron Campaign Guide":"Eberron Campaign Setting","Dragon Magazine Annual 2009":"Dragon Magazine Annual","EPIC 3-1":"EPIC3-1 The Glorious Hunt",
-  "The Book Of Vile Darkness":"The Book of Vile Darkness"};
+let RENAMED_BOOKS={};      // old name -> new name, from the core library
 const newBookNames = books => Array.isArray(books) ? [...new Set(books.map(b=>RENAMED_BOOKS[b]||b))] : null;
 function lastCampaign(){ try{ const c=JSON.parse(localStorage.getItem(CAMPKEY)||'null'); if(c && typeof c==='object') return {name:c.name||'Campaign', books:newBookNames(c.books), inherent:!!c.inherent}; }catch(e){} return {name:'All books', books:null}; }
 function sourcesOf(e){ return (e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core'); }

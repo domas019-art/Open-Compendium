@@ -1,0 +1,514 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Open Compendium core library: rules and lists the program needs, written for Open Compendium (no book text).
+     It ships with the program and may be shared. Edit it with care: the program reads it as it is. -->
+<D20Rules game-system="D&amp;D4E">
+  <!-- Point buy and ability arrays (Player's Handbook, chapter 2) -->
+  <RulesElement name="Point Buy" type="Core Table" internal-id="ID_OCC_POINT_BUY" source="Open Compendium Core">
+    <specific name="Points">22</specific>
+    <specific name="Costs">10:0, 11:1, 12:2, 13:3, 14:5, 15:7, 16:9, 17:12, 18:16</specific>
+    Scores start at 10 (one may start at 8). Costs are cumulative for raising a score from 10.
+  </RulesElement>
+  <RulesElement name="18, 14, 11, 10, 10, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_1" source="Open Compendium Core">
+    <specific name="Scores">18, 14, 11, 10, 10, 8</specific>
+  </RulesElement>
+  <RulesElement name="18, 13, 13, 10, 10, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_2" source="Open Compendium Core">
+    <specific name="Scores">18, 13, 13, 10, 10, 8</specific>
+  </RulesElement>
+  <RulesElement name="18, 13, 11, 10, 10, 10" type="Ability Array" internal-id="ID_OCC_ARRAY_3" source="Open Compendium Core">
+    <specific name="Scores">18, 13, 11, 10, 10, 10</specific>
+  </RulesElement>
+  <RulesElement name="17, 16, 11, 10, 10, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_4" source="Open Compendium Core">
+    <specific name="Scores">17, 16, 11, 10, 10, 8</specific>
+  </RulesElement>
+  <RulesElement name="17, 15, 13, 10, 10, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_5" source="Open Compendium Core">
+    <specific name="Scores">17, 15, 13, 10, 10, 8</specific>
+  </RulesElement>
+  <RulesElement name="17, 14, 12, 11, 10, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_6" source="Open Compendium Core">
+    <specific name="Scores">17, 14, 12, 11, 10, 8</specific>
+  </RulesElement>
+  <RulesElement name="16, 16, 13, 11, 10, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_7" source="Open Compendium Core">
+    <specific name="Scores">16, 16, 13, 11, 10, 8</specific>
+  </RulesElement>
+  <RulesElement name="16, 16, 12, 12, 11, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_8" source="Open Compendium Core">
+    <specific name="Scores">16, 16, 12, 12, 11, 8</specific>
+  </RulesElement>
+  <RulesElement name="16, 14, 14, 11, 11, 8" type="Ability Array" internal-id="ID_OCC_ARRAY_9" source="Open Compendium Core">
+    <specific name="Scores">16, 14, 14, 11, 11, 8</specific>
+  </RulesElement>
+  <RulesElement name="16, 14, 13, 12, 11, 10" type="Ability Array" internal-id="ID_OCC_ARRAY_10" source="Open Compendium Core">
+    <specific name="Scores">16, 14, 13, 12, 11, 10</specific>
+    <specific name="Standard">Yes</specific>
+  </RulesElement>
+  <!-- Experience and money by level -->
+  <RulesElement name="Experience by Level" type="Core Table" internal-id="ID_OCC_XP" source="Open Compendium Core">
+    <specific name="Values">0, 1000, 2250, 3750, 5500, 7500, 10000, 13000, 16500, 20500, 26000, 32000, 39000, 47000, 57000, 69000, 83000, 99000, 119000, 143000, 175000, 210000, 255000, 310000, 375000, 450000, 550000, 675000, 825000, 1000000</specific>
+    Total XP needed for levels 1 to 30. Used only when the builder library has no level table.
+  </RulesElement>
+  <RulesElement name="Starting Money" type="Core Table" internal-id="ID_OCC_START_MONEY" source="Open Compendium Core">
+    <specific name="Gold">100</specific>
+    A new 1st-level character starts with 100 gp. Above 1st level: the price of a magic item one level lower (see Magic Item Value by Level).
+  </RulesElement>
+  <RulesElement name="Magic Item Value by Level" type="Core Table" internal-id="ID_OCC_ITEM_VALUE" source="Open Compendium Core">
+    <specific name="Values">360, 520, 680, 840, 1000, 1800, 2600, 3400, 4200, 5000, 9000, 13000, 17000, 21000, 25000, 45000, 65000, 85000, 105000, 125000, 225000, 325000, 425000, 525000, 625000, 1125000, 1625000, 2125000, 2625000, 3125000</specific>
+    Price in gold of a typical magic item of levels 1 to 30, used for starting money above 1st level.
+  </RulesElement>
+  <!-- Basic attacks everyone has -->
+  <RulesElement name="Charge" type="Power" internal-id="ID_OCC_CHARGE" source="Open Compendium Core">
+    <specific name="Power Usage">At-Will</specific>
+    <specific name="Action Type">Standard action</specific>
+    <specific name="Attack Type">Melee (after moving)</specific>
+    <specific name="Display">Basic Attack</specific>
+    Standard action. Move up to your speed, at least 2 squares from where you started, to the nearest square from which you can attack the target.
+Then make a melee basic attack or a bull rush with a +1 bonus to the attack roll.
+The movement provokes opportunity attacks as usual. After a charge you can't take any further actions this turn, unless you spend an action point.
+  </RulesElement>
+  <RulesElement name="Unarmed" type="Weapon" internal-id="ID_OCC_UNARMED" source="Open Compendium Core">
+    <specific name="Damage">1d4</specific>
+    <specific name="Group">Unarmed</specific>
+    <specific name="Weapon Category">Unarmed Melee</specific>
+  </RulesElement>
+  <!-- Actions in combat (Player's Handbook, chapter 9), shown on the character sheet -->
+  <RulesElement name="Basic attack" type="Combat Action" internal-id="ID_OCC_ACTION_BASIC_ATTACK" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    a melee or ranged basic attack
+  </RulesElement>
+  <RulesElement name="Charge" type="Combat Action" internal-id="ID_OCC_ACTION_CHARGE" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    move your speed (at least 2 squares) and make a melee basic attack or bull rush, +1 to attack
+  </RulesElement>
+  <RulesElement name="Bull rush" type="Combat Action" internal-id="ID_OCC_ACTION_BULL_RUSH" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    Strength vs. Fortitude: push the target 1 square and shift into its space
+  </RulesElement>
+  <RulesElement name="Grab" type="Combat Action" internal-id="ID_OCC_ACTION_GRAB" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    Strength vs. Reflex: the target is immobilized until it escapes
+  </RulesElement>
+  <RulesElement name="Second wind" type="Combat Action" internal-id="ID_OCC_ACTION_SECOND_WIND" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    spend a healing surge, +2 to all defenses until the start of your next turn (once per encounter)
+  </RulesElement>
+  <RulesElement name="Total defense" type="Combat Action" internal-id="ID_OCC_ACTION_TOTAL_DEFENSE" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    +2 to all defenses until the start of your next turn
+  </RulesElement>
+  <RulesElement name="Aid another" type="Combat Action" internal-id="ID_OCC_ACTION_AID_ANOTHER" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    DC 10 check: an ally gets +2 to an attack roll or a skill check, or +2 to a defense against one attack
+  </RulesElement>
+  <RulesElement name="Coup de grace" type="Combat Action" internal-id="ID_OCC_ACTION_COUP_DE_GRACE" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    attack a helpless adjacent enemy; a hit is a critical hit
+  </RulesElement>
+  <RulesElement name="Ready an action" type="Combat Action" internal-id="ID_OCC_ACTION_READY_AN_ACTION" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    choose an action and a trigger; take it as an immediate reaction
+  </RulesElement>
+  <RulesElement name="Administer a potion" type="Combat Action" internal-id="ID_OCC_ACTION_ADMINISTER_A_POTION" source="Open Compendium Core">
+    <specific name="Group">Standard actions</specific>
+    help an unconscious ally drink a potion
+  </RulesElement>
+  <RulesElement name="Walk" type="Combat Action" internal-id="ID_OCC_ACTION_WALK" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    move up to your speed
+  </RulesElement>
+  <RulesElement name="Shift" type="Combat Action" internal-id="ID_OCC_ACTION_SHIFT" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    move 1 square without provoking opportunity attacks
+  </RulesElement>
+  <RulesElement name="Run" type="Combat Action" internal-id="ID_OCC_ACTION_RUN" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    speed + 2; −5 to attacks and you grant combat advantage until your next turn
+  </RulesElement>
+  <RulesElement name="Stand up" type="Combat Action" internal-id="ID_OCC_ACTION_STAND_UP" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    stand up from prone
+  </RulesElement>
+  <RulesElement name="Crawl" type="Combat Action" internal-id="ID_OCC_ACTION_CRAWL" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    move half your speed while prone
+  </RulesElement>
+  <RulesElement name="Squeeze" type="Combat Action" internal-id="ID_OCC_ACTION_SQUEEZE" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    move half your speed through a narrow space; −5 to attacks, grant combat advantage
+  </RulesElement>
+  <RulesElement name="Escape" type="Combat Action" internal-id="ID_OCC_ACTION_ESCAPE" source="Open Compendium Core">
+    <specific name="Group">Move actions</specific>
+    Acrobatics vs. Reflex or Athletics vs. Fortitude to end a grab; shift 1 square on a success
+  </RulesElement>
+  <RulesElement name="Draw or sheathe a weapon" type="Combat Action" internal-id="ID_OCC_ACTION_DRAW_OR_SHEATHE_A_WEAPON" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Drink a potion" type="Combat Action" internal-id="ID_OCC_ACTION_DRINK_A_POTION" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Pick up an item" type="Combat Action" internal-id="ID_OCC_ACTION_PICK_UP_AN_ITEM" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Retrieve or stow an item" type="Combat Action" internal-id="ID_OCC_ACTION_RETRIEVE_OR_STOW_AN_ITEM" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Open or close a door" type="Combat Action" internal-id="ID_OCC_ACTION_OPEN_OR_CLOSE_A_DOOR" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Drop prone" type="Combat Action" internal-id="ID_OCC_ACTION_DROP_PRONE" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Load a crossbow" type="Combat Action" internal-id="ID_OCC_ACTION_LOAD_A_CROSSBOW" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+  </RulesElement>
+  <RulesElement name="Sustain a power" type="Combat Action" internal-id="ID_OCC_ACTION_SUSTAIN_A_POWER" source="Open Compendium Core">
+    <specific name="Group">Minor actions</specific>
+    powers with “Sustain Minor”
+  </RulesElement>
+  <RulesElement name="Spend an action point" type="Combat Action" internal-id="ID_OCC_ACTION_SPEND_AN_ACTION_POINT" source="Open Compendium Core">
+    <specific name="Group">Free actions</specific>
+    an extra action this turn (once per encounter, not in a surprise round)
+  </RulesElement>
+  <RulesElement name="Talk" type="Combat Action" internal-id="ID_OCC_ACTION_TALK" source="Open Compendium Core">
+    <specific name="Group">Free actions</specific>
+    a few sentences
+  </RulesElement>
+  <RulesElement name="Drop an item" type="Combat Action" internal-id="ID_OCC_ACTION_DROP_AN_ITEM" source="Open Compendium Core">
+    <specific name="Group">Free actions</specific>
+  </RulesElement>
+  <RulesElement name="End a grab" type="Combat Action" internal-id="ID_OCC_ACTION_END_A_GRAB" source="Open Compendium Core">
+    <specific name="Group">Free actions</specific>
+  </RulesElement>
+  <RulesElement name="Opportunity attack" type="Combat Action" internal-id="ID_OCC_ACTION_OPPORTUNITY_ATTACK" source="Open Compendium Core">
+    <specific name="Group">Immediate and opportunity actions</specific>
+    a melee basic attack when an adjacent enemy moves away or makes a ranged or area attack (one per enemy turn)
+  </RulesElement>
+  <RulesElement name="Readied action" type="Combat Action" internal-id="ID_OCC_ACTION_READIED_ACTION" source="Open Compendium Core">
+    <specific name="Group">Immediate and opportunity actions</specific>
+    the action you readied, when its trigger happens
+  </RulesElement>
+  <RulesElement name="Immediate interrupt or reaction" type="Combat Action" internal-id="ID_OCC_ACTION_IMMEDIATE_INTERRUPT_OR_REACTION" source="Open Compendium Core">
+    <specific name="Group">Immediate and opportunity actions</specific>
+    a power with that action type (one per round)
+  </RulesElement>
+  <!-- Conditions and how long effects last, for the character sheet -->
+  <RulesElement name="Blinded" type="Condition" internal-id="ID_OCC_CONDITION_BLINDED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Dazed" type="Condition" internal-id="ID_OCC_CONDITION_DAZED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Deafened" type="Condition" internal-id="ID_OCC_CONDITION_DEAFENED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Dominated" type="Condition" internal-id="ID_OCC_CONDITION_DOMINATED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Dying" type="Condition" internal-id="ID_OCC_CONDITION_DYING" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Grabbed" type="Condition" internal-id="ID_OCC_CONDITION_GRABBED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Helpless" type="Condition" internal-id="ID_OCC_CONDITION_HELPLESS" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Immobilized" type="Condition" internal-id="ID_OCC_CONDITION_IMMOBILIZED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Insubstantial" type="Condition" internal-id="ID_OCC_CONDITION_INSUBSTANTIAL" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Invisible" type="Condition" internal-id="ID_OCC_CONDITION_INVISIBLE" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Marked" type="Condition" internal-id="ID_OCC_CONDITION_MARKED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Petrified" type="Condition" internal-id="ID_OCC_CONDITION_PETRIFIED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Prone" type="Condition" internal-id="ID_OCC_CONDITION_PRONE" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Restrained" type="Condition" internal-id="ID_OCC_CONDITION_RESTRAINED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Slowed" type="Condition" internal-id="ID_OCC_CONDITION_SLOWED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Stunned" type="Condition" internal-id="ID_OCC_CONDITION_STUNNED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Surprised" type="Condition" internal-id="ID_OCC_CONDITION_SURPRISED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Unconscious" type="Condition" internal-id="ID_OCC_CONDITION_UNCONSCIOUS" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Weakened" type="Condition" internal-id="ID_OCC_CONDITION_WEAKENED" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="Ongoing damage" type="Condition" internal-id="ID_OCC_CONDITION_ONGOING_DAMAGE" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="save ends" type="Effect Duration" internal-id="ID_OCC_DURATION_SAVE_ENDS" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="end of your next turn" type="Effect Duration" internal-id="ID_OCC_DURATION_END_OF_YOUR_NEXT_TURN" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="start of your next turn" type="Effect Duration" internal-id="ID_OCC_DURATION_START_OF_YOUR_NEXT_TURN" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="end of the encounter" type="Effect Duration" internal-id="ID_OCC_DURATION_END_OF_THE_ENCOUNTER" source="Open Compendium Core">
+  </RulesElement>
+  <RulesElement name="until removed" type="Effect Duration" internal-id="ID_OCC_DURATION_UNTIL_REMOVED" source="Open Compendium Core">
+  </RulesElement>
+  <!-- Optional Details (the original builder's campaign options, plus two house rules) -->
+  <RulesElement name="Inherent Bonuses" type="Optional Detail" internal-id="ID_OCC_DETAIL_INHERENT" source="Open Compendium Core">
+    <specific name="Key">inherent</specific>
+    <specific name="IDs">ID_INTERNAL_INTERNAL_INHERENT_BONUSES</specific>
+    Your character gets inherent enhancement bonuses to attacks, damage and defenses as you level, instead of relying on magic items.
+  </RulesElement>
+  <RulesElement name="Expertise and Defenses for free" type="Optional Detail" internal-id="ID_OCC_DETAIL_FEATTAX" source="Open Compendium Core">
+    <specific name="Key">featTax</specific>
+    <specific name="IDs">ID_FMP_FEAT_2785, ID_FMP_FEAT_3143</specific>
+    The common fix for the later 4e math: every character gets Versatile Expertise and Improved Defenses without spending feats on them (+1 to attacks and to Fortitude, Reflex and Will, rising to +2 at 11th and +3 at 21st level).
+  </RulesElement>
+  <RulesElement name="Dark Sun" type="Optional Detail" internal-id="ID_OCC_DETAIL_DARKSUN" source="Open Compendium Core">
+    <specific name="Key">darksun</specific>
+    <specific name="IDs">ID_INTERNAL_INTERNAL_DARK_SUN</specific>
+    A Dark Sun campaign on the continent of Athas. Adds a wild talent choice.
+  </RulesElement>
+  <RulesElement name="Spellscarred" type="Optional Detail" internal-id="ID_OCC_DETAIL_SPELLSCAR" source="Open Compendium Core">
+    <specific name="Key">spellscar</specific>
+    <specific name="IDs">ID_FMP_PSEUDO_CLASS_216</specific>
+    Forgotten Realms characters can optionally start with a spellscar.
+  </RulesElement>
+  <RulesElement name="Harper" type="Optional Detail" internal-id="ID_OCC_DETAIL_HARPER" source="Open Compendium Core">
+    <specific name="Key">harper</specific>
+    <specific name="IDs">ID_INTERNAL_INTERNAL_HARPER</specific>
+    Forgotten Realms characters who gain membership in the Harpers.
+  </RulesElement>
+  <RulesElement name="House Vadalis" type="Optional Detail" internal-id="ID_OCC_DETAIL_VADALIS" source="Open Compendium Core">
+    <specific name="Key">vadalis</specific>
+    <specific name="IDs">ID_INTERNAL_INTERNAL_HOUSE_VADALIS</specific>
+    Eberron characters who are members of House Vadalis.
+  </RulesElement>
+  <RulesElement name="Circle of Smoke and Whispers" type="Optional Detail" internal-id="ID_OCC_DETAIL_SMOKE" source="Open Compendium Core">
+    <specific name="Key">smoke</specific>
+    <specific name="IDs">ID_INTERNAL_INTERNAL_CIRCLE_OF_SMOKE_AND_WHISPERS</specific>
+    Membership in the Circle of Smoke and Whispers.
+  </RulesElement>
+  <RulesElement name="Intimidate with your best ability (house rule)" type="Optional Detail" internal-id="ID_OCC_DETAIL_INTIMHIGHEST" source="Open Compendium Core">
+    <specific name="Key">intimHighest</specific>
+    <specific name="Homebrew">Yes</specific>
+    Intimidate uses your highest ability modifier instead of Charisma.
+  </RulesElement>
+  <RulesElement name="Free-acting companions (house rule)" type="Optional Detail" internal-id="ID_OCC_DETAIL_FREEBEASTS" source="Open Compendium Core">
+    <specific name="Key">freeBeasts</specific>
+    <specific name="Homebrew">Yes</specific>
+    Your companions' basic attacks don't use your actions, and attack powers with the Beast keyword can be used by any of your beast companions.
+  </RulesElement>
+  <!-- Full names of the compendium's book codes -->
+  <RulesElement name="Adventurer's Vault" type="Book" internal-id="ID_OCC_BOOK_AV" source="Open Compendium Core">
+    <specific name="Code">AV</specific>
+  </RulesElement>
+  <RulesElement name="Dark Sun Campaign Setting" type="Book" internal-id="ID_OCC_BOOK_DSCS" source="Open Compendium Core">
+    <specific name="Code">DSCS</specific>
+  </RulesElement>
+  <RulesElement name="Player's Handbook" type="Book" internal-id="ID_OCC_BOOK_PHB" source="Open Compendium Core">
+    <specific name="Code">PHB</specific>
+  </RulesElement>
+  <RulesElement name="Player's Handbook 2" type="Book" internal-id="ID_OCC_BOOK_PHB2" source="Open Compendium Core">
+    <specific name="Code">PHB2</specific>
+  </RulesElement>
+  <RulesElement name="Eberron Player's Guide" type="Book" internal-id="ID_OCC_BOOK_EPG" source="Open Compendium Core">
+    <specific name="Code">EPG</specific>
+  </RulesElement>
+  <RulesElement name="Adventurer's Vault 2" type="Book" internal-id="ID_OCC_BOOK_AV2" source="Open Compendium Core">
+    <specific name="Code">AV2</specific>
+  </RulesElement>
+  <RulesElement name="Mordenkainen's Magnificent Emporium" type="Book" internal-id="ID_OCC_BOOK_MME" source="Open Compendium Core">
+    <specific name="Code">MME</specific>
+  </RulesElement>
+  <RulesElement name="Manual of the Planes" type="Book" internal-id="ID_OCC_BOOK_MOTP" source="Open Compendium Core">
+    <specific name="Code">MotP</specific>
+  </RulesElement>
+  <RulesElement name="Player's Handbook 3" type="Book" internal-id="ID_OCC_BOOK_PHB3" source="Open Compendium Core">
+    <specific name="Code">PHB3</specific>
+  </RulesElement>
+  <RulesElement name="Psionic Power" type="Book" internal-id="ID_OCC_BOOK_PSP" source="Open Compendium Core">
+    <specific name="Code">PsP</specific>
+  </RulesElement>
+  <RulesElement name="E1 Death's Reach" type="Book" internal-id="ID_OCC_BOOK_E1" source="Open Compendium Core">
+    <specific name="Code">E1</specific>
+  </RulesElement>
+  <RulesElement name="The Plane Below" type="Book" internal-id="ID_OCC_BOOK_TPB" source="Open Compendium Core">
+    <specific name="Code">TPB</specific>
+  </RulesElement>
+  <RulesElement name="The Shadowfell" type="Book" internal-id="ID_OCC_BOOK_TS" source="Open Compendium Core">
+    <specific name="Code">TS</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of the Elemental Chaos" type="Book" internal-id="ID_OCC_BOOK_HOTEC" source="Open Compendium Core">
+    <specific name="Code">HotEC</specific>
+  </RulesElement>
+  <RulesElement name="Dungeon Master's Guide" type="Book" internal-id="ID_OCC_BOOK_DMG" source="Open Compendium Core">
+    <specific name="Code">DMG</specific>
+  </RulesElement>
+  <RulesElement name="Player's Handbook Races: Tiefling" type="Book" internal-id="ID_OCC_BOOK_PHR_T" source="Open Compendium Core">
+    <specific name="Code">PHR:T</specific>
+  </RulesElement>
+  <RulesElement name="HS1 The Slaying Stone" type="Book" internal-id="ID_OCC_BOOK_HS1" source="Open Compendium Core">
+    <specific name="Code">HS1</specific>
+  </RulesElement>
+  <RulesElement name="Forgotten Realms Player's Guide" type="Book" internal-id="ID_OCC_BOOK_FRPG" source="Open Compendium Core">
+    <specific name="Code">FRPG</specific>
+  </RulesElement>
+  <RulesElement name="Primal Power" type="Book" internal-id="ID_OCC_BOOK_PP" source="Open Compendium Core">
+    <specific name="Code">PP</specific>
+  </RulesElement>
+  <RulesElement name="Player's Handbook Races: Dragonborn" type="Book" internal-id="ID_OCC_BOOK_PHR_D" source="Open Compendium Core">
+    <specific name="Code">PHR:D</specific>
+  </RulesElement>
+  <RulesElement name="Divine Power" type="Book" internal-id="ID_OCC_BOOK_DP" source="Open Compendium Core">
+    <specific name="Code">DP</specific>
+  </RulesElement>
+  <RulesElement name="Arcane Power" type="Book" internal-id="ID_OCC_BOOK_AP" source="Open Compendium Core">
+    <specific name="Code">AP</specific>
+  </RulesElement>
+  <RulesElement name="Martial Power 2" type="Book" internal-id="ID_OCC_BOOK_MP2" source="Open Compendium Core">
+    <specific name="Code">MP2</specific>
+  </RulesElement>
+  <RulesElement name="Neverwinter Campaign Setting" type="Book" internal-id="ID_OCC_BOOK_NCS" source="Open Compendium Core">
+    <specific name="Code">NCS</specific>
+  </RulesElement>
+  <RulesElement name="Into the Unknown: The Dungeon Survival Handbook" type="Book" internal-id="ID_OCC_BOOK_DSH" source="Open Compendium Core">
+    <specific name="Code">DSH</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of the Feywild" type="Book" internal-id="ID_OCC_BOOK_HOTF" source="Open Compendium Core">
+    <specific name="Code">HotF</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of the Forgotten Kingdoms" type="Book" internal-id="ID_OCC_BOOK_HOTFK" source="Open Compendium Core">
+    <specific name="Code">HotFK</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of the Fallen Lands" type="Book" internal-id="ID_OCC_BOOK_HOTFL" source="Open Compendium Core">
+    <specific name="Code">HotFL</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of Shadow" type="Book" internal-id="ID_OCC_BOOK_HOS" source="Open Compendium Core">
+    <specific name="Code">HoS</specific>
+  </RulesElement>
+  <RulesElement name="Martial Power" type="Book" internal-id="ID_OCC_BOOK_MP" source="Open Compendium Core">
+    <specific name="Code">MP</specific>
+  </RulesElement>
+  <RulesElement name="Forgotten Realms Campaign Guide" type="Book" internal-id="ID_OCC_BOOK_FRCG" source="Open Compendium Core">
+    <specific name="Code">FRCG</specific>
+  </RulesElement>
+  <RulesElement name="Monster Vault: Threats to the Nentir Vale" type="Book" internal-id="ID_OCC_BOOK_MV_TTTNV" source="Open Compendium Core">
+    <specific name="Code">MV:TttNV</specific>
+  </RulesElement>
+  <RulesElement name="Dungeon Master's Guide 2" type="Book" internal-id="ID_OCC_BOOK_DMG2" source="Open Compendium Core">
+    <specific name="Code">DMG2</specific>
+  </RulesElement>
+  <RulesElement name="Eberron Campaign Setting" type="Book" internal-id="ID_OCC_BOOK_ECS" source="Open Compendium Core">
+    <specific name="Code">ECS</specific>
+  </RulesElement>
+  <RulesElement name="Monster Manual 2" type="Book" internal-id="ID_OCC_BOOK_MM2" source="Open Compendium Core">
+    <specific name="Code">MM2</specific>
+  </RulesElement>
+  <RulesElement name="Monster Vault" type="Book" internal-id="ID_OCC_BOOK_MV" source="Open Compendium Core">
+    <specific name="Code">MV</specific>
+  </RulesElement>
+  <RulesElement name="Class Compendium" type="Book" internal-id="ID_OCC_BOOK_CC" source="Open Compendium Core">
+    <specific name="Code">CC</specific>
+  </RulesElement>
+  <RulesElement name="Monster Manual" type="Book" internal-id="ID_OCC_BOOK_MM" source="Open Compendium Core">
+    <specific name="Code">MM</specific>
+  </RulesElement>
+  <RulesElement name="Rules Compendium" type="Book" internal-id="ID_OCC_BOOK_RC" source="Open Compendium Core">
+    <specific name="Code">RC</specific>
+  </RulesElement>
+  <RulesElement name="P2 Demon Queen Enclave" type="Book" internal-id="ID_OCC_BOOK_P2" source="Open Compendium Core">
+    <specific name="Code">P2</specific>
+  </RulesElement>
+  <RulesElement name="H1 Keep on the Shadowfell" type="Book" internal-id="ID_OCC_BOOK_H1" source="Open Compendium Core">
+    <specific name="Code">H1</specific>
+  </RulesElement>
+  <RulesElement name="P3 Assault on Nightwyrm Fortress" type="Book" internal-id="ID_OCC_BOOK_P3" source="Open Compendium Core">
+    <specific name="Code">P3</specific>
+  </RulesElement>
+  <RulesElement name="Dungeon Master's Kit" type="Book" internal-id="ID_OCC_BOOK_DMK" source="Open Compendium Core">
+    <specific name="Code">DMK</specific>
+  </RulesElement>
+  <RulesElement name="Draconomicon: Metallic Dragons" type="Book" internal-id="ID_OCC_BOOK_DRACO_METALLIC" source="Open Compendium Core">
+    <specific name="Code">Draco: Metallic</specific>
+  </RulesElement>
+  <RulesElement name="FR1 Scepter Tower of Spellgard" type="Book" internal-id="ID_OCC_BOOK_FR1" source="Open Compendium Core">
+    <specific name="Code">FR1</specific>
+  </RulesElement>
+  <RulesElement name="E2 Kingdom of the Ghouls" type="Book" internal-id="ID_OCC_BOOK_E2" source="Open Compendium Core">
+    <specific name="Code">E2</specific>
+  </RulesElement>
+  <RulesElement name="P1 King of the Trollhaunt Warrens" type="Book" internal-id="ID_OCC_BOOK_P1" source="Open Compendium Core">
+    <specific name="Code">P1</specific>
+  </RulesElement>
+  <RulesElement name="Draconomicon: Chromatic Dragons" type="Book" internal-id="ID_OCC_BOOK_DRACO_CHROMATIC" source="Open Compendium Core">
+    <specific name="Code">Draco: Chromatic</specific>
+  </RulesElement>
+  <RulesElement name="E3 Prince of Undeath" type="Book" internal-id="ID_OCC_BOOK_E3" source="Open Compendium Core">
+    <specific name="Code">E3</specific>
+  </RulesElement>
+  <RulesElement name="H3 Pyramid of Shadows" type="Book" internal-id="ID_OCC_BOOK_H3" source="Open Compendium Core">
+    <specific name="Code">H3</specific>
+  </RulesElement>
+  <RulesElement name="Monster Manual 3" type="Book" internal-id="ID_OCC_BOOK_MM3" source="Open Compendium Core">
+    <specific name="Code">MM3</specific>
+  </RulesElement>
+  <RulesElement name="H2 Thunderspire Labyrinth" type="Book" internal-id="ID_OCC_BOOK_H2" source="Open Compendium Core">
+    <specific name="Code">H2</specific>
+  </RulesElement>
+  <RulesElement name="HS2 Orcs of Stonefang Pass" type="Book" internal-id="ID_OCC_BOOK_HS2" source="Open Compendium Core">
+    <specific name="Code">HS2</specific>
+  </RulesElement>
+  <RulesElement name="Dungeon Delve" type="Book" internal-id="ID_OCC_BOOK_DD" source="Open Compendium Core">
+    <specific name="Code">DD</specific>
+  </RulesElement>
+  <RulesElement name="Dragons of Eberron" type="Book" internal-id="ID_OCC_BOOK_DOE" source="Open Compendium Core">
+    <specific name="Code">DoE</specific>
+  </RulesElement>
+  <RulesElement name="Dark Sun Creature Catalog" type="Book" internal-id="ID_OCC_BOOK_DSCC" source="Open Compendium Core">
+    <specific name="Code">DSCC</specific>
+  </RulesElement>
+  <RulesElement name="The Plane Above" type="Book" internal-id="ID_OCC_BOOK_TPA" source="Open Compendium Core">
+    <specific name="Code">TPA</specific>
+  </RulesElement>
+  <RulesElement name="PH Heroes: Series 1" type="Book" internal-id="ID_OCC_BOOK_PHH_S1" source="Open Compendium Core">
+    <specific name="Code">PHH:S1</specific>
+  </RulesElement>
+  <RulesElement name="PH Heroes: Series 2" type="Book" internal-id="ID_OCC_BOOK_PHH_S2" source="Open Compendium Core">
+    <specific name="Code">PHH:S2</specific>
+  </RulesElement>
+  <RulesElement name="Red Box Starter Set" type="Book" internal-id="ID_OCC_BOOK_RED_BOX" source="Open Compendium Core">
+    <specific name="Code">Red Box</specific>
+  </RulesElement>
+  <!-- Builder books renamed in the libraries, so saved book lists still find them -->
+  <RulesElement name="Into the Unknown: The Dungeon Survival Handbook" type="Renamed Book" internal-id="ID_OCC_RENAMED_DUNGEON_SURVIVAL_HANDBOOK" source="Open Compendium Core">
+    <specific name="Old Name">Dungeon Survival Handbook</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of the Fallen Lands" type="Renamed Book" internal-id="ID_OCC_RENAMED_PLAYER_ESSENTIALS_HEROES_OF_THE_FALLEN_LANDS" source="Open Compendium Core">
+    <specific name="Old Name">Player Essentials: Heroes of the Fallen Lands</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of the Forgotten Kingdoms" type="Renamed Book" internal-id="ID_OCC_RENAMED_PLAYER_ESSENTIALS_HEROES_OF_THE_FORGOTTEN_KINGDOMS" source="Open Compendium Core">
+    <specific name="Old Name">Player Essentials: Heroes of the Forgotten Kingdoms</specific>
+  </RulesElement>
+  <RulesElement name="Heroes of Shadow" type="Renamed Book" internal-id="ID_OCC_RENAMED_PLAYER_ESSENTIALS_HEROES_OF_SHADOW" source="Open Compendium Core">
+    <specific name="Old Name">Player Essentials: Heroes of Shadow</specific>
+  </RulesElement>
+  <RulesElement name="Neverwinter Campaign Setting" type="Renamed Book" internal-id="ID_OCC_RENAMED_NEVERWINTER_CAMPAIGN_GUIDE" source="Open Compendium Core">
+    <specific name="Old Name">Neverwinter Campaign Guide</specific>
+  </RulesElement>
+  <RulesElement name="Class Compendium" type="Renamed Book" internal-id="ID_OCC_RENAMED_PLAYER_ESSENTIALS_CLASS_COMPENDIUM" source="Open Compendium Core">
+    <specific name="Old Name">Player Essentials: Class Compendium</specific>
+  </RulesElement>
+  <RulesElement name="Dragon Magazine 427" type="Renamed Book" internal-id="ID_OCC_RENAMED_DRAGON_427" source="Open Compendium Core">
+    <specific name="Old Name">Dragon 427</specific>
+  </RulesElement>
+  <RulesElement name="The Plane Below" type="Renamed Book" internal-id="ID_OCC_RENAMED_THE_PLANE_BELOW_SECRETS_OF_THE_ELEMENTAL_CHAOS" source="Open Compendium Core">
+    <specific name="Old Name">The Plane Below: Secrets of the Elemental Chaos</specific>
+  </RulesElement>
+  <RulesElement name="Open Grave" type="Renamed Book" internal-id="ID_OCC_RENAMED_OPEN_GRAVE_SECRETS_OF_THE_UNDEAD" source="Open Compendium Core">
+    <specific name="Old Name">Open Grave: Secrets of the Undead</specific>
+  </RulesElement>
+  <RulesElement name="Dragon Magazine 410" type="Renamed Book" internal-id="ID_OCC_RENAMED_THINGAMAJIGS_OF_THE_BARRIER_PEAKS_DRAGON_MAGAZINE_410" source="Open Compendium Core">
+    <specific name="Old Name">Thingamajigs of the Barrier Peaks (Dragon Magazine 410)</specific>
+  </RulesElement>
+  <RulesElement name="Dungeon Magazine 205" type="Renamed Book" internal-id="ID_OCC_RENAMED_DUNGEON_MAGAZINE_405" source="Open Compendium Core">
+    <specific name="Old Name">Dungeon Magazine 405</specific>
+  </RulesElement>
+  <RulesElement name="Eberron Campaign Setting" type="Renamed Book" internal-id="ID_OCC_RENAMED_EBERRON_CAMPAIGN_GUIDE" source="Open Compendium Core">
+    <specific name="Old Name">Eberron Campaign Guide</specific>
+  </RulesElement>
+  <RulesElement name="Dragon Magazine Annual" type="Renamed Book" internal-id="ID_OCC_RENAMED_DRAGON_MAGAZINE_ANNUAL_2009" source="Open Compendium Core">
+    <specific name="Old Name">Dragon Magazine Annual 2009</specific>
+  </RulesElement>
+  <RulesElement name="EPIC3-1 The Glorious Hunt" type="Renamed Book" internal-id="ID_OCC_RENAMED_EPIC_3_1" source="Open Compendium Core">
+    <specific name="Old Name">EPIC 3-1</specific>
+  </RulesElement>
+  <RulesElement name="The Book of Vile Darkness" type="Renamed Book" internal-id="ID_OCC_RENAMED_THE_BOOK_OF_VILE_DARKNESS" source="Open Compendium Core">
+    <specific name="Old Name">The Book Of Vile Darkness</specific>
+  </RulesElement>
+</D20Rules>

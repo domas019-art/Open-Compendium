@@ -1,7 +1,13 @@
 :root{
-  --bg:#f6f4ef; --panel:#fffdf8; --ink:#25221d; --muted:#6f685c; --line:#ddd6c8;
-  --accent:#8f2a3a; --accent-ink:#fff; --hover:#efe9dc; --sel:#e8dcc6; --stat:#ece5d3;
+  /* light: parchment, like the original Character Builder */
+  --bg:#eadfc3; --panel:#f4ebd6; --ink:#2a2318; --muted:#6a5c43; --line:#cdbb94;
+  --accent:#8f2a3a; --accent-ink:#fff; --hover:#e3d4b1; --sel:#d8c399; --stat:#e5d7b4;
 }
+/* a faint mottling, as on old paper (light theme only) */
+:root:not([data-theme=dark]) body{background-image:
+  radial-gradient(ellipse at 20% 15%,rgba(255,250,235,.55),transparent 55%),
+  radial-gradient(ellipse at 85% 80%,rgba(190,160,110,.18),transparent 60%),
+  radial-gradient(ellipse at 60% 40%,rgba(205,180,130,.12),transparent 50%);background-attachment:fixed}
 :root[data-theme=dark]{--bg:#17161a; --panel:#1f1e23; --ink:#e8e4da; --muted:#9a9487; --line:#34323a;
     --accent:#c4506a; --hover:#2a2830; --sel:#3a3340; --stat:#2b2931;}
 *{box-sizing:border-box}
@@ -58,6 +64,7 @@ tr.row.on{background:var(--sel)}
 .entry h1:first-child{margin-top:0}
 .entry h1.player,.entry h1.familiar{background:#bbbbff}
 .entry h1.monster{background:#88bb88}   /* monsters: green, as in the books */
+.entry[data-cat=companion] h1.player,.entry[data-cat=companion] h1.familiar{background:#88bb88}   /* companions and familiars are creatures too */
 .entry h1.template{background:#c4b2e8}
 .entry h1.theme{background:#a9c8ec}
 /* the action type above a power in newer theme blocks (STANDARD ACTIONS ...) */
@@ -715,4 +722,8 @@ dialog.askdlg p{margin:0}
 .trapblockbody .bul{padding-left:1.5em;text-indent:-1.5em}
 .trapblockbody .star{display:inline-block;width:1.5em;text-indent:0}
 /* newer monster layout: the action groups (Traits, Standard Actions, ...) as narrow bands, as in the books */
-.entry h1.monster ~ h2{font-size:13px;font-variant:small-caps;letter-spacing:.04em;margin:8px 0 0;padding:2px 12px;background:#8a8aa0;color:#fff;font-weight:700}
+.entry h1.monster ~ h2{font-size:13px;font-variant:small-caps;letter-spacing:.04em;margin:8px 0 0;padding:2px 12px;background:#b9d9b9;color:#1d2b1d;font-weight:700}
+/* the monster's power headings (Traits, Standard Actions...): a lighter green than its name bar, as in the official entries */
+:root[data-theme=dark] .entry h1.monster ~ h2{background:#3f5e3f;color:#eef5ee}
+/* a monster's core stats: the second item on a line after a wide gap, as in the books */
+.entry span.gap{display:inline-block;width:2.5em}

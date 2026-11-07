@@ -3,14 +3,16 @@
 An offline compendium, character builder and character sheet for the 4th edition D&D, as a portable Windows program.
 
 **It contains no game content.** It reads your own library files (the web compendium files and the Character Builder's
-`combined.dnd40.merged.xml` made by CBLoader) from the `Libraries` folder next to the programs.
+`combined.dnd40.merged.xml` made by CBLoader) from the `Libraries` folder next to the programs. The only library it
+comes with is `Libraries/open-compendium-core.part`: short rules summaries and lists the program needs (point buy and
+ability arrays, Charge, combat actions, conditions, book names), written for this project, with no book text.
 
 ## Folders
 
 | Folder | What is in it |
 |---|---|
 | `app/` | The program itself: `main.js` (the window, files, no internet), `preload.js`, and `web/` (the screens) |
-| `dist-files/` | Files that go next to the program in a release (the user README) |
+| `dist-files/` | Files that go next to the program in a release (the user README and the core library, `Libraries/open-compendium-core.part`) |
 | `tools/` | The icon, and `brand.ts` (puts the icon and version into the .exe) |
 
 ## Making a release
