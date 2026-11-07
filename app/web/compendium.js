@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.83';
+const APP_VERSION = '0.99.84';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -211,9 +211,13 @@ const NUM_RE = /\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?/;
 function startNum(v){ const m=NUM_RE.exec(String(v)); return m ? parseFloat(m[0].replace(/,/g,'')) : null; }
 /* Searching: a name is found by its words in any order; apostrophes don't matter ("Griffons Pull" finds "Griffon's Pull").
    Book names are never searched (the book lists are for that). */
-const searchNorm = s => String(s??'').toLowerCase().replace(/['’‘`´]/g,'');
-const searchWords = q => searchNorm(q).split(/\s+/).filter(Boolean);
-const wordsIn = (words, hay) => words.every(w=>hay.includes(w));
+// search: apostrophes vanish, other punctuation counts as a space, and several words must appear together in the order typed
+const searchNorm = s => ' '+String(s??'').toLowerCase().replace(/['’‘`´]/g,'').replace(/[^\p{L}\p{N}+]+/gu,' ').trim()+' ';
+const searchWords = q => searchNorm(q).split(' ').filter(Boolean);
+const _phraseRe = new WeakMap();   // 'griff pu' still finds 'Griffon's Pull': each word may be the start of a longer word
+const wordsIn = (words, hay) => { if(!words.length) return true; if(words.length===1) return hay.includes(words[0]);
+  let re=_phraseRe.get(words); if(!re){ re=new RegExp(words.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('\\S* ')); _phraseRe.set(words,re); }
+  return re.test(hay); };
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const V = cat => views[cat];
 const where = id => views[S.cat]?.ref ? views[S.cat].ref[id] : [S.cat,id];     // list id -> [category, entry id]
@@ -246,7 +250,7 @@ function prepare(){
     for(const r of c.rows){
       const uid=cat+':'+r[0];
       all.rows.push([uid, r[ni], lbl, li>=0 ? r[li] : '', sc>=0 ? r[sc] : '']);
-      all.hay[uid]=c.hay[r[0]]; (all.hayAll ||= {})[uid]=c.hayAll[r[0]]+' '+lbl.toLowerCase();
+      all.hay[uid]=c.hay[r[0]]; (all.hayAll ||= {})[uid]=c.hayAll[r[0]]+searchNorm(lbl);
       all.ref[uid]=[cat,r[0]];
     }
   }
@@ -258,7 +262,7 @@ function prepare(){
     for(const r of c.rows){ if(!keep(r,col)) continue; const uid=cat+':'+r[0];
       const lv = li>=0 ? r[li] : ((/class=level>Level (\d+)/.exec(c.data[r[0]]||'')||[])[1] || '');      // companions have no Level column
       mt.rows.push([uid, r[ni], kind, lv, si>=0 ? r[si] : '', ti>=0 ? r[ti] : '', sc>=0 ? r[sc] : '']);
-      mt.hay[uid]=c.hay[r[0]]; (mt.hayAll ||= {})[uid]=c.hayAll[r[0]]+' '+kind.toLowerCase(); mt.ref[uid]=[cat,r[0]]; } };
+      mt.hay[uid]=c.hay[r[0]]; (mt.hayAll ||= {})[uid]=c.hayAll[r[0]]+searchNorm(kind); mt.ref[uid]=[cat,r[0]]; } };
   pick('monster',(r,col)=>tokens(r[col('CreatureType')]).some(t=>/^mount$/i.test(t)),'Monster');
   pick('companion',(r,col)=>/^mount$/i.test(String(r[col('Type')]).trim()),'Companion');
   if(mt.rows.length) views[MOUNT]=mt;
