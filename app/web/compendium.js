@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.81';
+const APP_VERSION = '0.99.82';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -209,6 +209,11 @@ const tokens = v => String(v).split(/,|\band\b|\bor\b|\//i).map(x=>x.trim()).fil
 const bookTokens = v => String(v).split(/[,;]/).map(x=>x.trim()).filter(Boolean);
 const NUM_RE = /\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?/;
 function startNum(v){ const m=NUM_RE.exec(String(v)); return m ? parseFloat(m[0].replace(/,/g,'')) : null; }
+/* Searching: a name is found by its words in any order; apostrophes don't matter ("Griffons Pull" finds "Griffon's Pull").
+   Book names are never searched (the book lists are for that). */
+const searchNorm = s => String(s??'').toLowerCase().replace(/['’‘`´]/g,'');
+const searchWords = q => searchNorm(q).split(/\s+/).filter(Boolean);
+const wordsIn = (words, hay) => words.every(w=>hay.includes(w));
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const V = cat => views[cat];
 const where = id => views[S.cat]?.ref ? views[S.cat].ref[id] : [S.cat,id];     // list id -> [category, entry id]
@@ -224,7 +229,9 @@ function prepare(){
   }
   for(const c of Object.values(lib)){
     // Some cells are lists like ["1+",1,16,6,...]: the first item is shown, the rest are other tiers (still searchable).
-    if(!c.hay){ c.hay={}; for(const r of c.rows) c.hay[r[0]]=(r.map(x=>Array.isArray(x)?x.join(' '):x).join(' ')+' '+(c.also?.[r[0]]||[]).join(' ')).toLowerCase(); }
+    { c.hay={}; c.hayAll={}; const ni=nameCol(c), sc=srcCol(c);
+      for(const r of c.rows){ c.hay[r[0]]=searchNorm(r[ni]+' '+(c.also?.[r[0]]||[]).join(' '));
+        c.hayAll[r[0]]=searchNorm(r.filter((x,i)=>i!==sc && i!==0).map(x=>Array.isArray(x)?x.join(' '):x).join(' ')+' '+(c.also?.[r[0]]||[]).join(' ')); } }
     const li=c.cols.indexOf('Level');
     c.rows=c.rows.map(r=>{ const o=r.map(x=>Array.isArray(x)?String(x[0]):x);
       if(li>=0 && String(o[li]).trim()==='') o[li]='0';       // no level counts as level 0
@@ -239,7 +246,7 @@ function prepare(){
     for(const r of c.rows){
       const uid=cat+':'+r[0];
       all.rows.push([uid, r[ni], lbl, li>=0 ? r[li] : '', sc>=0 ? r[sc] : '']);
-      all.hay[uid]=c.hay[r[0]]+' '+lbl.toLowerCase();
+      all.hay[uid]=c.hay[r[0]]; (all.hayAll ||= {})[uid]=c.hayAll[r[0]]+' '+lbl.toLowerCase();
       all.ref[uid]=[cat,r[0]];
     }
   }
@@ -251,7 +258,7 @@ function prepare(){
     for(const r of c.rows){ if(!keep(r,col)) continue; const uid=cat+':'+r[0];
       const lv = li>=0 ? r[li] : ((/class=level>Level (\d+)/.exec(c.data[r[0]]||'')||[])[1] || '');      // companions have no Level column
       mt.rows.push([uid, r[ni], kind, lv, si>=0 ? r[si] : '', ti>=0 ? r[ti] : '', sc>=0 ? r[sc] : '']);
-      mt.hay[uid]=c.hay[r[0]]+' '+kind.toLowerCase(); mt.ref[uid]=[cat,r[0]]; } };
+      mt.hay[uid]=c.hay[r[0]]; (mt.hayAll ||= {})[uid]=c.hayAll[r[0]]+' '+kind.toLowerCase(); mt.ref[uid]=[cat,r[0]]; } };
   pick('monster',(r,col)=>tokens(r[col('CreatureType')]).some(t=>/^mount$/i.test(t)),'Monster');
   pick('companion',(r,col)=>/^mount$/i.test(String(r[col('Type')]).trim()),'Companion');
   if(mt.rows.length) views[MOUNT]=mt;
@@ -261,8 +268,10 @@ function lowIndex(cat){
   if(S.lowCache[cat]) return S.lowCache[cat];
   const o={};
   if(cat===ALL){ for(const k of Object.keys(lib)){ const l=lowIndex(k); for(const id in l) o[k+':'+id]=l[id]; } }
-  else if(views[cat]?.ref){ for(const [uid,[k,id]] of Object.entries(views[cat].ref)){ const v=lib[k].index[id]; if(v) o[uid]=v.toLowerCase(); } }
-  else for(const [k,v] of Object.entries(lib[cat].index)) o[k]=v.toLowerCase();
+  else if(views[cat]?.ref){ for(const [uid,[k,id]] of Object.entries(views[cat].ref)){ const l=lowIndex(k)[id]; if(l) o[uid]=l; } }
+  // the entry's text without its "Published in" line (books are not searched)
+  else { const c=lib[cat]; for(const k of new Set([...Object.keys(c.index),...Object.keys(c.data)])){ const h=c.data[k];
+    o[k]=searchNorm(h ? h.replace(/<p class=publishedIn>[\s\S]*?<\/p>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/g,' ') : String(c.index[k]||'').replace(/Published in[\s\S]*$/,'')); } }
   return S.lowCache[cat]=o;
 }
 
@@ -304,7 +313,7 @@ function activeCount(c){ const sc=srcCol(c); if(sc<0 || !S.hidden.size) return c
 
 function visibleRows(){
   const c=V(S.cat), mt=meta(S.cat), sc=srcCol(c);
-  const qs=S.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const qs=searchWords(S.q);
   const low=S.full ? lowIndex(S.cat) : null;
   const fs=Object.entries(S.filters).filter(([,v])=>v!=='' && v!=null);
   const rows=c.rows.filter(r=>{
@@ -315,8 +324,8 @@ function visibleRows(){
       else if(!tokens(r[i]).some(t=>t.toLowerCase()===v.toLowerCase())) return false;
     }
     if(qs.length){
-      const hay=(c.hay[r[0]] ?? r.join(' ').toLowerCase()) + (low ? ' '+(low[r[0]]||'') : '');
-      for(const q of qs) if(!hay.includes(q)) return false;
+      const hay=S.full ? (c.hayAll?.[r[0]] ?? '')+' '+(low[r[0]]||'') : (c.hay[r[0]] ?? searchNorm(r[nameCol(c)]));
+      if(!wordsIn(qs,hay)) return false;
     }
     return true;
   });

@@ -864,7 +864,8 @@ const Builder={
   },
   renderPicker(){
     const P=this.picker, {slot,q}=P, picks=this.picksOf(slot);
-    const opts=this.options(slot).filter(o=>!q || (o.el.name+' '+(o.el.also||[]).join(' ')+' '+metaLine(o.el)).toLowerCase().includes(q));
+    const qw=searchWords(q), wide=!!this.ch.showAll[this.stepOf(slot)];
+    const opts=this.options(slot).filter(o=>!qw.length || elMatch(o.el,qw,wide));
     $('#pkCount').textContent=`${picks.length} of ${slot.number} chosen · ${opts.length} option${opts.length===1?'':'s'}`;
     const list=$('#pkList'); list.replaceChildren();
     // group long lists the way the original builder does
@@ -1114,6 +1115,15 @@ function slotTitle(slot){
   return t;
 }
 function shortSource(e){ const s=e.source||''; return s==='Core'?'':s; }
+/* the builder's searches: the name (and other names it is known by); with "Show everything available" ticked, its
+   text too. Never the book it is from. */
+const _elHay=new WeakMap();
+function elMatch(e,words,wide){
+  let h=_elHay.get(e);
+  if(!h){ const sp2=Object.entries(e.spec||{}).filter(([k,v])=>k[0]!=='_' && !/^ID_/.test(String(v))).map(([,v])=>v).join(' ');
+    h={name:searchNorm(e.name+' '+(e.also||[]).join(' ')), all:searchNorm([e.name,(e.also||[]).join(' '),e.flavor||'',sp2,e.text||'',readablePre(e)||''].join(' '))}; _elHay.set(e,h); }
+  return wordsIn(words, wide ? h.all : h.name);
+}
 function metaLine(e){
   const s=e.spec, bits=[];
   if(e.type==='Power') bits.push(s['Display']||'', s['Power Usage']||'', s['Action Type']||'');

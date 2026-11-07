@@ -65,6 +65,8 @@ function implFits(m,b){ const g=implGroup(b), t=sp(m,'Magic Item Type');
   if(g==='Dagger') return t==='Weapon' && baseFits(m,{type:'Weapon',name:'Dagger',spec:{Group:'Light Blade','Weapon Category':'Simple Melee'}});
   return t===g; }
 function shopCat(e){
+  // the animal master's animal minions (Dragon 399: cat, dog, hawk...) are given by the theme, not sold
+  if(e.type==='Gear' && sp(e,'Category')==='Mount' && /Category:\s*Companion/i.test(sp(e,'Full Text'))) return '';
   if(e.type==='Gear') return sp(e,'Category')==='Mount' ? 'Mounts' : sp(e,'Category')==='Ammunition' ? 'Ammunition' : 'Adventuring Gear';
   if(e.type==='Armor') return /barding/i.test(e.name) ? 'Barding' : 'Armor';
   if(e.type==='Item Set') return 'Item Sets';
@@ -186,8 +188,8 @@ Object.assign(Builder,{
     // keep the chosen weapon, armor or set visible in its list
     setTimeout(()=>{ const b=document.querySelector('.shopbases button.on'), box=b?.parentElement; if(b && (b.offsetTop<box.scrollTop || b.offsetTop>box.scrollTop+box.clientHeight-30)) box.scrollTop=b.offsetTop-box.clientHeight/2; },0);
     const cats=SHOP_CATS.filter(c=>idx.byCat[c]?.length);
-    const q=S.q.trim().toLowerCase();
-    const visible=r=>(S.all||this.bookOk(r.e)) && (!q || r.e.name.toLowerCase().includes(q)) && (!S.profOnly || this.profOk(r.e)) && (S.large || !r.large);
+    const q=S.q.trim().toLowerCase(), qw=searchWords(q);
+    const visible=r=>(S.all||this.bookOk(r.e)) && (!q || elMatch(r.e,qw,S.all)) && (!S.profOnly || this.profOk(r.e)) && (S.large || !r.large);
     const counts={}; for(const c of cats) counts[c]=idx.byCat[c].filter(visible).length;
     const shown=q ? cats.filter(c=>counts[c]) : cats;
     if(!shown.includes(S.cat)) S.cat=shown[0]||cats[0];      // a search jumps to the first category that has matches
@@ -509,8 +511,8 @@ Object.assign(Builder,{
     // like the original, everything up to the character's level is listed; the feat and key skill are only reminders
     const why=e=>(+sp(e,'Level')||0)>L ? 'higher level than the character' : !this.bookOk(e) ? 'book not in this campaign' : '';
     const all=(RULES.db.byType['Ritual']||[]).map(id=>RULES.db.els[id]).filter(e=>ritualKind(e)===kind);
-    const q=S.q.trim().toLowerCase();
-    const rows=all.filter(e=>!known.includes(e.id) && (S.all || !why(e)) && (!q || e.name.toLowerCase().includes(q)))
+    const q=S.q.trim().toLowerCase(), qw=searchWords(q);
+    const rows=all.filter(e=>!known.includes(e.id) && (S.all || !why(e)) && (!q || elMatch(e,qw,S.all)))
       .sort((a,b)=>(+sp(a,'Level')||0)-(+sp(b,'Level')||0) || a.name.localeCompare(b.name));
     const nameCol={rituals:'Ritual',alchemy:'Formula',practices:'Practice'}[kind];
     const body=el('tbody');

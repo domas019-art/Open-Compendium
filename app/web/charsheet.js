@@ -6,7 +6,7 @@
    What happens in play (damage, used powers, conditions...) is kept in ch.play and saved with the character.
    ===================================================================== */
 
-const SHEET_TABS=[['combat','Powers & Combat'],['skills','Skills & Abilities'],['features','Features & Feats'],['gear','Inventory'],['notes','Companions & Notes']];
+const SHEET_TABS=[['combat','Powers & Combat'],['skills','Skills & Abilities'],['features','Features & Feats'],['gear','Inventory'],['notes','Companions & Notes'],['mounts','Mounts']];
 const CONDITIONS=['Blinded','Dazed','Deafened','Dominated','Dying','Grabbed','Helpless','Immobilized','Insubstantial','Invisible','Marked','Petrified','Prone','Restrained','Slowed','Stunned','Surprised','Unconscious','Weakened','Ongoing damage'];
 const DURATIONS=['save ends','end of your next turn','start of your next turn','end of the encounter','until removed'];
 // what an effect can change, and the numbers it changes
@@ -56,9 +56,10 @@ Object.assign(Builder,{
   sheetStep(){
     if(this.stab==='powers') this.stab='combat';
     this.stab ||= 'combat';
-    const tabs=el('nav',{class:'steps sheettabs'}, ...SHEET_TABS.map(([k,l])=>el('button',{type:'button',class:'step'+(this.stab===k?' on':''),onclick:()=>{ this.stab=k; this.render(); }},l)));
+    const hasMounts=this.mounts().length>0; if(this.stab==='mounts' && !hasMounts) this.stab='combat';
+    const tabs=el('nav',{class:'steps sheettabs'}, ...SHEET_TABS.filter(([k])=>k!=='mounts'||hasMounts).map(([k,l])=>el('button',{type:'button',class:'step'+(this.stab===k?' on':''),onclick:()=>{ this.stab=k; this.render(); }},l)));
     const vit=this.vitals();      // first: it works out being bloodied, which the powers below depend on
-    const body=({combat:()=>this.combatTab(), skills:()=>this.skillsTab(), features:()=>this.featuresTab(), gear:()=>this.gearTab(), notes:()=>this.notesTab()}[this.stab]||(()=>[]))();
+    const body=({combat:()=>this.combatTab(), skills:()=>this.skillsTab(), features:()=>this.featuresTab(), gear:()=>this.gearTab(), notes:()=>this.notesTab(), mounts:()=>this.mountsTab()}[this.stab]||(()=>[]))();
     return [el('div',{class:'sheetwrap'}, vit, tabs, ...body.filter(Boolean))];
   },
 
@@ -142,7 +143,7 @@ Object.assign(Builder,{
       ...P.effects.map(e=>el('span',{class:'vcond eff'+(P.remind && e.dur==='save ends'?' remind':'')}, `${e.stat}${e.kw?' ('+e.kw+')':''}${e.kws?.length?' ('+e.kws.join(', ')+')':''}${e.melee?' (melee)':''} ${fmt(+e.value)}${e.dtype?' '+e.dtype:''}`, e.note?el('small',{text:' '+e.note}):null, el('small',{text:' · '+(e.dur||'')}),
         el('button',{class:'x',type:'button','aria-label':'Remove effect',text:'×',onclick:()=>set(()=>{ P.effects=P.effects.filter(x=>x!==e); })})))) : null;
     // the companions' hit points: smaller bars under yours, using the same amount
-    const petBars=this.pets().filter(x=>x.max>0).map(x=>{
+    const petBars=[...this.pets(),...this.mounts()].filter(x=>x.max>0).map(x=>{
       const S=((P.pets ||= {})[x.key] ||= {}); if(S.hp==null||S.hp>x.max) S.hp=x.max;
       const ph=Math.max(0,Math.min(100,S.hp/x.max*100)), down=S.hp<=0, bl=!down && S.hp<=Math.floor(x.max/2);
       const takeP=fn=>{ const n=Math.max(0,parseInt(amount.value,10)||0); if(!n) return; this.hpAmt=0; set(()=>fn(n)); };
@@ -409,6 +410,8 @@ Object.assign(Builder,{
       if(t==='At-will') list.splice(list.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
       return el('div',{class:'pcol '+cls}, el('h3',{text:t+' '}, el('small',{class:'muted',text:list.length})), this.powerList(list)); });
     if(petList.length) columns.splice(4,0,el('div',{class:'pcol up'}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:[...pets.map(x=>x.name),...fams.map(f=>f.name)].join(' · ')})), this.powerList(petList)));
+    const mounts=this.mounts();
+    if(mounts.length) columns.splice(petList.length?5:4,0,el('div',{class:'pcol up'}, el('h3',{text:'Mounts '}, el('small',{class:'muted',text:mounts.map(x=>x.name).join(' · ')})), this.powerList(mounts.flatMap(x=>[...x.powers,...x.traits]))));
     const rest=all.filter(p=>!seen.has(p.id));
     if(rest.length) columns.push(el('div',{class:'pcol u3'}, el('h3',{text:'Other'}), this.powerList(rest)));
     const itemPw=this.itemAttacks();
@@ -709,6 +712,69 @@ Object.assign(Builder,{
       pet.auras=Object.entries(spec).filter(([k,v])=>/\(aura \d+\)/i.test(v) || /aura/i.test(k)).map(([k,v])=>{ v=String(v).trim(); const m=/^(\([^)]*\))\s*([\s\S]*)$/.exec(v);
         return {id:'aura:'+p.id+':'+k, virtual:true, aura:true, pet, name:m?`${k} ${m[1]}`:k, type:'Power', spec:{'Power Usage':'','Action Type':'Aura'}, text:m?m[2]:v}; });
       out.push(pet);
+    }
+    return out;
+  },
+  /* ---------- mounts: the mounts in the inventory, from their creature entry in the compendium ----------
+     Each has its hit points (a bar under yours), defenses, speed and its powers. A mount that grows with its rider
+     ("HP your bloodied value", "your level + 7 vs. AC", "+ your Strength or Charisma modifier") is worked out
+     from the character's own numbers. */
+  mounts(){
+    const ch=this.ch, st=this.st, L=st.level, db=RULES.db, out=[];
+    const AB={strength:'Strength',constitution:'Constitution',dexterity:'Dexterity',intelligence:'Intelligence',wisdom:'Wisdom',charisma:'Charisma'};
+    const amod=a=>Math.floor((st.stat(a)-10)/2);
+    for(const it of ch.items||[]){
+      const e=db?.els[it.ids?.[0]];
+      if(!e || e.type!=='Gear' || sp(e,'Category')!=='Mount' || /Category:\s*Companion/i.test(sp(e,'Full Text')) || (it.qty||1)<=0) continue;
+      const ref=compendiumRef(e), html=ref ? (lib[ref[0]].data[ref[1]]||'') : '';
+      const box=document.createElement('div'); box.innerHTML=html ? sanitize(html) : '';
+      const txt=html ? box.textContent : sp(e,'_Monster')||sp(e,'Full Text');
+      const kind=(/^(.*?)(?:<br|$)/.exec(box.querySelector('h1')?.innerHTML||'')?.[1]||e.name).replace(/<[^>]+>/g,'').trim();
+      const lvl=(/Level (\d+)/.exec(box.querySelector('h1 .level')?.textContent||txt)||[])[1];
+      const scaled=/your bloodied value|your defenses|your level/i.test(txt);
+      const max=/HP\s*your bloodied value/i.test(txt) ? Math.floor(this.maxHP()/2) : +((/HP\s*(\d+)/.exec(txt)||[])[1]||0);
+      const dm=/AC\s*(\d+)[;,]\s*Fortitude\s*(\d+),\s*Reflex\s*(\d+),\s*Will\s*(\d+)/.exec(txt), yd=/Defenses\s*your defenses(?:\s*\+\s*(\d+))?/i.exec(txt);
+      const defs=dm ? dm.slice(1,5).map(Number) : yd ? ['AC','Fortitude Defense','Reflex Defense','Will Defense'].map(n=>st.stat(n)+(+yd[1]||0)) : null;
+      const grab=re=>{ const m=re.exec(html||txt); return m ? m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim() : ''; };
+      const speed=grab(/<b>Speed<\/b>\s*([^<]*)/)||grab(/Speed\s*([^\n]*)/), init=grab(/<b>Initiative<\/b>\s*([^<]*)/), perc=grab(/Perception(?:<\/b>)?\s*([+-]?\s*\d+)/);
+      const m={key:'mount:'+it.uid, uid:it.uid, name:e.name, kind:kind!==e.name?kind:(lvl?'Level '+lvl+' mount':'Mount'), max, defs, speed, init, perc, scaled, ref, el:e, powers:[], traits:[]};
+      // its powers: a heading line, then its lines (the newer layout groups them under "Standard Actions" and the like)
+      let section='';
+      const heads=[];
+      for(const n of box.children){
+        if(n.tagName==='H2'){ section=n.textContent.trim(); continue; }
+        if(n.matches('p.flavor.alt') && n.querySelector('b') && !/^(Str|Alignment|Skills|Equipment)$/.test(n.querySelector('b').textContent.trim())){ heads.push({n, section, lines:[]}); continue; }
+        if(n.matches('p.flavorIndent') && heads.length) heads[heads.length-1].lines.push(n.textContent.trim());
+      }
+      heads.forEach((h,i)=>{
+        const head=h.n.textContent.replace(/\s+/g,' ').trim(), name=h.n.querySelector('b').textContent.trim(), body=h.lines.join('\n');
+        const usage=(/\b(at-will|encounter|daily|recharge[^;)✦]*)/i.exec(head)||[])[1]||'';
+        const act=/standard/i.test(h.section)?'Standard action':/move/i.test(h.section)?'Move action':/minor/i.test(h.section)?'Minor action':/free/i.test(h.section)?'Free action':/triggered/i.test(h.section)?((/\((Immediate (?:Reaction|Interrupt)|Free Action|Opportunity Action|No Action)\)/i.exec(body)||[])[1]||'Triggered'):
+          (/\((standard|move|minor|free|immediate reaction|immediate interrupt|opportunity|no action)\b/i.exec(head)||[])[1]||(/\(\s*when\b/i.test(head)?'Triggered':'');
+        const isTrait=/trait/i.test(h.section) || (!usage && !act);
+        const forRider=/\(mount\)|✦\s*Mount\b|while mounted by/i.test(head);
+        const P={id:'mount:'+it.uid+':'+i, virtual:true, pet:m, name:name+(forRider?' (mount)':''), type:'Power', text:head+'\n'+body,
+          spec:{'Power Usage':usage.replace(/^./,c=>c.toUpperCase()), 'Action Type':act.replace(/^./,c=>c.toUpperCase()), 'Attack Type':(/((?:Melee|Ranged|Reach) \d+|Close (?:burst|blast) \d+|Area burst \d+ within \d+)/i.exec(body)||[])[1]||''}};
+        if(isTrait){ P.aura=true; P.spec['Action Type']='Trait'; P.text=body||head; m.traits.push(P); return; }
+        // the attack: "+12 vs. AC" or "your level + 7 vs. AC"; the damage: "2d6 + 10" or "2d6 + your Strength or Charisma modifier"
+        const am=/(?:your level\s*\+\s*(\d+)|([+-]\s*\d+))\s*vs\.?\s*(AC|Fortitude|Reflex|Will)?/i.exec(body);
+        if(am && am[3]){
+          const atkParts=am[1] ? [[L,'your level'],[+am[1],'from its card']] : [[+am[2].replace(/\s/g,''),'its attack bonus']];
+          const hitTxt=(/Hit:\s*([^\n]*)/.exec(body)||[])[1] || body.slice(am.index+am[0].length);
+          const dmm=/(\d+d\d+)\s*(?:\+\s*(?:(\d+)\b|your (\w+)(?: or (\w+))? modifier|(one-half your level)))?/i.exec(hitTxt);
+          let dmg='', dmgParts=[];
+          if(dmm){
+            let flat=0;
+            if(dmm[2]) { flat=+dmm[2]; dmgParts.push([flat,'from its card']); }
+            else if(dmm[3]){ const a=[dmm[3],dmm[4]].filter(Boolean).map(x=>AB[x.toLowerCase()]).filter(Boolean), best=a.sort((x,y)=>amod(y)-amod(x))[0]; if(best){ flat=amod(best); dmgParts.push([flat,'your '+best+' modifier']); } }
+            else if(dmm[5]){ flat=Math.floor(L/2); dmgParts.push([flat,'one-half your level']); }
+            dmg=dmm[1]+(flat?(flat>0?'+':'')+flat:'');
+          }
+          P.calc={rows:[{weapon:name, atk:atkParts.reduce((t,[v])=>t+v,0), def:am[3], dmg, dice:dmm?.[1]||'', diceNote:'(its card\'s dice)', atkParts, dmgParts}]};
+        }
+        m.powers.push(P);
+      });
+      out.push(m);
     }
     return out;
   },
@@ -1033,6 +1099,23 @@ Object.assign(Builder,{
           weight>str*10 ? el('p',{class:'warn',text:weight>str*20?'Over a heavy load: you can only drag it.':'Heavy load: you are slowed.'}) : null))];
   },
 
+  /* ---------- Mounts ---------- */
+  mountsTab(){
+    const P=this.play();
+    return this.mounts().map(m=>{
+      const S=(P.pets||{})[m.key]||{}, hp=S.hp??m.max;
+      const kv=(k,v)=>v||v===0 ? [el('span',{text:k}), el('div',{text:String(v)})] : [];
+      const card=el('div',{class:'bcard wide compcard'},
+        el('div',{class:'stephead'}, el('h3',{text:m.name+(m.kind?' — '+m.kind:'')})),
+        el('div',{class:'kv'}, ...kv('Hit points',`${hp} / ${m.max} (bloodied ${Math.floor(m.max/2)})`),
+          ...kv('Defenses', m.defs ? `AC ${m.defs[0]}, Fortitude ${m.defs[1]}, Reflex ${m.defs[2]}, Will ${m.defs[3]}` : ''),
+          ...kv('Speed',m.speed), ...kv('Initiative',m.init), ...kv('Perception',m.perc),
+          ...kv('Powers', m.powers.map(p=>p.calc?.rows[0] ? `${p.name} (${fmt(p.calc.rows[0].atk)} vs ${p.calc.rows[0].def}${p.calc.rows[0].dmg?', '+p.calc.rows[0].dmg:''})` : p.name).join(' · '))),
+        m.scaled ? el('p',{class:'muted small',text:'This mount grows with its rider: its numbers above are worked out from yours.'}) : null);
+      if(m.ref){ const ent=el('div',{class:'entry compsheet'}); renderInto(ent,m.ref[0],m.ref[1]); card.append(ent); }
+      return card;
+    });
+  },
   /* ---------- Companions & Notes ---------- */
   notesTab(){
     const ch=this.ch, st=this.st, P=this.play();
