@@ -45,6 +45,11 @@ install, or the update zip to unzip over an existing copy.
 - The program is not code-signed, so Windows may show "Windows protected your PC" the first time. Click
   **More info**, then **Run anyway**.
 
+## Plans
+
+- Linux and Android versions (Windows only for now)
+- DM tools based on Masterplan: encounters, changing a monster's level, and the newer monster math for older monsters
+
 ## Reporting a bug
 
 Open an [issue](https://github.com/domas019-art/Open-Compendium/issues/new?template=bug_report.md) and include:
