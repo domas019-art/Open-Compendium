@@ -1,9 +1,10 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.79';
+const APP_VERSION = '0.99.80';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
+const MOUNT = '~mount';     // a view, not a category: monsters with the mount keyword and the player mounts among the companions
 const S = {cat:null, q:'', full:false, filters:{}, sort:{col:'Name',dir:1}, limit:300, sel:null,
            lowCache:{}, meta:{}, terms:null, hidden:new Set(), books:[]};
 
@@ -200,7 +201,7 @@ async function libraryChangedBar(){
 async function wipe(){ try{ const db=await idb(); await new Promise(res=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').delete('library'); t.objectStore('kv').delete('rules'); t.oncomplete=res; }); }catch(e){} }
 
 /* ---------- helpers ---------- */
-const CAT_LABEL = {[ALL]:'Everything', epicdestiny:'Epic Destiny', paragonpath:'Paragon Path', monstertemplate:'Monster Template', monstertheme:'Monster Theme'};
+const CAT_LABEL = {[ALL]:'Everything', [MOUNT]:'Mount', epicdestiny:'Epic Destiny', paragonpath:'Paragon Path', monstertemplate:'Monster Template', monstertheme:'Monster Theme'};
 const catLabel = c => CAT_LABEL[c] || c.charAt(0).toUpperCase()+c.slice(1);
 const nameCol = c => Math.max(0, c.cols.indexOf('Name'));
 const srcCol = c => c.cols.findIndex(x=>/^source/i.test(x));
@@ -210,7 +211,7 @@ const NUM_RE = /\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?/;
 function startNum(v){ const m=NUM_RE.exec(String(v)); return m ? parseFloat(m[0].replace(/,/g,'')) : null; }
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const V = cat => views[cat];
-const where = id => S.cat===ALL ? views[ALL].ref[id] : [S.cat,id];     // list id -> [category, entry id]
+const where = id => views[S.cat]?.ref ? views[S.cat].ref[id] : [S.cat,id];     // list id -> [category, entry id]
 function bookOk(v){ if(!S.hidden.size) return true; const b=bookTokens(v); return !b.length || b.some(x=>!S.hidden.has(x)); }
 
 function prepare(){
@@ -243,12 +244,24 @@ function prepare(){
     }
   }
   views[ALL]=all;
+  // the Mount view: each row points at its entry in Monster or Companion
+  const mt={cols:['ID','Name','Kind','Level','Size','CreatureType','SourceBook'], rows:[], hay:{}, ref:{}};
+  const pick=(cat,keep,kind)=>{ const c=lib[cat]; if(!c) return;
+    const col=k=>c.cols.indexOf(k), ni=nameCol(c), li=col('Level'), si=col('Size'), ti=col('CreatureType'), sc=srcCol(c);
+    for(const r of c.rows){ if(!keep(r,col)) continue; const uid=cat+':'+r[0];
+      const lv = li>=0 ? r[li] : ((/class=level>Level (\d+)/.exec(c.data[r[0]]||'')||[])[1] || '');      // companions have no Level column
+      mt.rows.push([uid, r[ni], kind, lv, si>=0 ? r[si] : '', ti>=0 ? r[ti] : '', sc>=0 ? r[sc] : '']);
+      mt.hay[uid]=c.hay[r[0]]+' '+kind.toLowerCase(); mt.ref[uid]=[cat,r[0]]; } };
+  pick('monster',(r,col)=>tokens(r[col('CreatureType')]).some(t=>/^mount$/i.test(t)),'Monster');
+  pick('companion',(r,col)=>/^mount$/i.test(String(r[col('Type')]).trim()),'Companion');
+  if(mt.rows.length) views[MOUNT]=mt;
 }
 
 function lowIndex(cat){
   if(S.lowCache[cat]) return S.lowCache[cat];
   const o={};
   if(cat===ALL){ for(const k of Object.keys(lib)){ const l=lowIndex(k); for(const id in l) o[k+':'+id]=l[id]; } }
+  else if(views[cat]?.ref){ for(const [uid,[k,id]] of Object.entries(views[cat].ref)){ const v=lib[k].index[id]; if(v) o[uid]=v.toLowerCase(); } }
   else for(const [k,v] of Object.entries(lib[cat].index)) o[k]=v.toLowerCase();
   return S.lowCache[cat]=o;
 }
@@ -386,7 +399,7 @@ function start(){
   const want=S.tab || 'builder';          // the program always opens on the Character Builder
   showTab(!hasComp ? 'builder' : (want==='builder' && !hasRules ? 'comp' : want));
   if(!hasComp) return;
-  const cats=[ALL, ...Object.keys(lib).sort((a,b)=>catLabel(a).localeCompare(catLabel(b)))];
+  const cats=[ALL, ...[...Object.keys(lib), ...(views[MOUNT] ? [MOUNT] : [])].sort((a,b)=>catLabel(a).localeCompare(catLabel(b)))];
   $('#cats').replaceChildren(...cats.map(cat=>{
     const b=document.createElement('button'); b.type='button';
     b.innerHTML='<span></span><small></small>';
