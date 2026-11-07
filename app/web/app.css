@@ -77,11 +77,11 @@ tr.row.on{background:var(--sel)}
 .entry h1.encounterpower{background:#f26b6b}
 .entry h1.dailypower{background:#9a9a9a}
 .entry h1.magicitem,.entry h1.mihead{background:#ffe97a}
-.entry h1.trap,.entry h1.poison,.entry h1.thHead{background:#88bb88}
+.entry h1.trap,.entry h1.poison,.entry h1.thHead,.entry h1.dm{background:#bbbbff}   /* everything in the trap list shares the monsters' lavender */
 /* older traps and hazards are written as runs of spans: give each part its own line */
 .entry .traplead,.entry .trapblockbody{display:block;margin:2px 0}
 .entry .trapblockbody{padding-left:12px}
-.entry .trapblocktitle{display:block;font-weight:700;margin:10px 0 2px;padding:2px 12px;background:var(--stat);border-left:3px solid #88bb88}
+.entry .trapblocktitle{display:block;font-weight:700;margin:10px 0 2px;padding:2px 12px;background:var(--stat);border-left:3px solid #bbbbff}
 .entry .traplead{padding:6px 12px;background:var(--panel)}
 .entry span.ritualstats,.entry span.clearIndent{display:block}
 /* the newer trap and hazard layout (Dungeon Master's Kit and later) */
@@ -89,8 +89,8 @@ tr.row.on{background:var(--sel)}
 .entry h1.thHead .thLevel .thXP{display:block}
 /* the type word (Trap, Hazard) matches the older trap layout: as big and bold as the name */
 .entry p.thStat,.entry span.thInit{display:block;margin:0;padding:2px 12px;background:var(--stat)}
-.entry h2.thHead{font-size:14px;margin:10px 0 0;padding:3px 12px;background:#88bb88;color:#1a1a1a}
-.entry p.th2{margin:6px 0 0;padding:2px 12px;background:var(--panel);border-left:3px solid #88bb88}
+.entry h2.thHead{font-size:14px;margin:10px 0 0;padding:3px 12px;background:#bbbbff;color:#1a1a1a}
+.entry p.th2{margin:6px 0 0;padding:2px 12px;background:var(--panel);border-left:3px solid #bbbbff}
 .entry p.tbod,.entry p.thBody{margin:2px 0;padding-left:24px}
 .entry span.flavor{display:block;margin:8px 0 2px;padding:2px 12px;background:var(--stat)}
 .entry h1 .level{font-size:13px;font-weight:400;align-self:center;white-space:nowrap}
