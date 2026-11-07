@@ -88,7 +88,7 @@ function shopIndex(){
       // the other end of double weapons isn't a separate item; size variants ("(Large)") show only with "Show large weapons"
       if((e.type==='Weapon'||e.type==='Armor') && /secondary end/i.test(e.name)) continue;
       const large=(e.type==='Weapon'||e.type==='Armor') && /\((large|huge|small|tiny)( creature)?\)/i.test(e.name) && !/barding/i.test(e.name);
-      const r={e, large, cost:itemCost(e), level:+sp(e,'Level')||0, weight:+(sp(e,'Weight').replace(/[^\d.]/g,''))||0};
+      const r={e, large, cost:itemCost(e), level:+sp(e,'Level')||+((/ - Level (\d+)/.exec(sp(e,'_Monster'))||[])[1])||0, weight:+(sp(e,'Weight').replace(/[^\d.]/g,''))||0};
       (byCat[c] ||= []).push(r);
       // implements that can be made from a superior implement also show under Magic Implements
       if(IMPL_GROUPS.includes(sp(e,'Magic Item Type')) || (sp(e,'Magic Item Type')==='Weapon' && /any|dagger|light blade/i.test(sp(e,'Weapon')) && !/ranged|thrown/i.test(sp(e,'Weapon')))) (byCat['Magic Implements'] ||= []).push(r);

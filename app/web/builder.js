@@ -1333,6 +1333,13 @@ function compByName(cat,name){
   return _compNames[cat].m[name.toLowerCase()]||null;
 }
 function compendiumRef(e){
+  // a mount for sale: its creature entry in the compendium (ours name it; the original ones are found by name)
+  if(e.type==='Gear' && sp(e,'Category')==='Mount'){
+    const r=/^(\w+):(.+)$/.exec(sp(e,'_CompRef'));
+    if(r && lib[r[1]] && (lib[r[1]].data[r[2]]||lib[r[1]].index[r[2]])) return [r[1],r[2]];
+    const n=e.name.replace(/^(.+?) \((\w+)\)$/,'$1, $2');        // "Giant Lizard (Riding)" is "Giant Lizard, Riding" there
+    for(const cat of ['monster','companion']){ const id=lib[cat] && (compByName(cat,e.name)||compByName(cat,n)); if(id && (lib[cat].data[id]||lib[cat].index[id])) return [cat,id]; }
+  }
   if(/^(Magic Item|Gear|Armor|Weapon|Superior Implement)$/.test(e.type)){
     const n=e.name.replace(/\s*\((heroic|paragon|epic) tier\)$/i,'').replace(/\s*\(level \d+\)$/i,'').replace(/\s*\+\d+$/,'');
     const mt=sp(e,'Magic Item Type');
