@@ -540,6 +540,8 @@ body.sheetmode #bSheet{display:none}
 .vsep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
 .vchip.abil span{font-weight:600}
 .pcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;align-items:start;margin-bottom:12px}
+.pcols.laned{display:flex;gap:10px;align-items:flex-start}
+.plane{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:10px}
 .pcol{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px;border-top:4px solid var(--line)}
 .pcol.u0{border-top-color:#3c9a4f}.pcol.u1{border-top-color:#c0392b}.pcol.u2{border-top-color:#555}.pcol.u3{border-top-color:#2f7fb8}.pcol.ui{border-top-color:#d4a017}
 .pcol h3{margin:2px 4px 6px;font-size:15px}

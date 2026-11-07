@@ -228,7 +228,7 @@ Object.assign(Builder,{
     else rows=(idx.byCat[S.cat]||[]).filter(visible);
     if(magic && base) rows=rows.filter(r=>magic==='Superior Implement' ? implFits(r.e,base) : baseFits(r.e,base));
     const view=set ? 'sets' : magic ? 'magic' : S.cat==='Armor'||S.cat==='Barding' ? 'armor' : S.cat==='Weapons' ? 'weapon'
-      : /^(Adventuring Gear|Ammunition|Mounts|Superior Implements|Scrolls)$/.test(S.cat) ? 'gear' : 'magic';
+      : S.cat==='Mounts' ? 'mounts' : /^(Adventuring Gear|Ammunition|Superior Implements|Scrolls)$/.test(S.cat) ? 'gear' : 'magic';
     const num=x=>+String(x).replace(/[^\d.-]/g,'')||0, dash=v=>(v && v!=='-') ? v : '—';
     const nameCell=r=>el('td',{}, r.e.name, sp(r.e,'_Item_Set_ID') && view!=='sets' ? el('span',{class:'settag',title:'Part of an item set',text:'SET'}) : null,
       this.bookOk(r.e)?null:el('span',{class:'hb small',title:'book not in this campaign',text:'HB'}));
@@ -241,11 +241,12 @@ Object.assign(Builder,{
         ['price','Price',r=>r.cost?fmtMoney(r.cost):'—',r=>r.cost,1],['group','Group',r=>sp(r.e,'Group'),r=>sp(r.e,'Group')],
         ['props','Properties',r=>sp(r.e,'Properties'),r=>sp(r.e,'Properties')],['weight','Weight',r=>r.weight?r.weight+' lb':'—',r=>r.weight,1]],
       gear:[['name','Item',nameCell,r=>r.e.name],['price','Price',r=>r.cost?fmtMoney(r.cost):'—',r=>r.cost,1],['weight','Weight',r=>r.weight?r.weight+' lb':'—',r=>r.weight,1]],
+      mounts:[['level','Lvl',r=>r.level||'*',r=>r.level,1],['name','Mount',nameCell,r=>r.e.name],['price','Price',r=>r.cost?fmtMoney(r.cost):'—',r=>r.cost,1]],
       magic:[['level','Lvl',r=>r.level||'*',r=>r.level,1],['name',magic?'Enchantment':'Name',nameCell,r=>r.e.name],['price','Price',r=>r.cost?fmtMoney(r.cost):'—',r=>r.cost,1]],
       sets:[['level','Lvl',r=>r.level||'*',r=>r.level,1],['name','Name',nameCell,r=>r.e.name],['price','Price',r=>r.cost?fmtMoney(r.cost):'—',r=>r.cost,1],
         ['slot','Item slot',r=>sp(r.e,'Item Slot').replace(/^Off-hand$/i,'')||'',r=>sp(r.e,'Item Slot')]],
     }[view];
-    const DEF={armor:'bonus',weapon:'name',gear:'name',magic:'level',sets:'level'};
+    const DEF={armor:'bonus',weapon:'name',gear:'name',mounts:'level',magic:'level',sets:'level'};
     let [sk,dir]=S.sorts[view]||[DEF[view],1];
     const col=COLS.find(c=>c[0]===sk)||COLS[0];
     rows=[...rows].sort((a,b)=>{ const x=col[3](a), y=col[3](b);

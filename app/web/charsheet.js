@@ -408,17 +408,17 @@ Object.assign(Builder,{
     const seen=new Set();
     const columns=cols.map(([t,f,cls])=>{ const list=all.filter(p=>!seen.has(p.id)&&f(p)); list.forEach(p=>seen.add(p.id));
       if(t==='At-will') list.splice(list.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
-      return el('div',{class:'pcol '+cls}, el('h3',{text:t+' '}, el('small',{class:'muted',text:list.length})), this.powerList(list)); });
-    if(petList.length) columns.splice(4,0,el('div',{class:'pcol up'}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:[...pets.map(x=>x.name),...fams.map(f=>f.name)].join(' · ')})), this.powerList(petList)));
+      return el('div',{class:'pcol '+cls,dataset:{role:{'At-will':'atwill','Encounter':'encounter','Daily':'daily','Utility':'utility'}[t]}}, el('h3',{text:t+' '}, el('small',{class:'muted',text:list.length})), this.powerList(list)); });
+    if(petList.length) columns.splice(4,0,el('div',{class:'pcol up',dataset:{role:'pets'}}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:[...pets.map(x=>x.name),...fams.map(f=>f.name)].join(' · ')})), this.powerList(petList)));
     const mounts=this.mounts();
-    if(mounts.length) columns.splice(petList.length?5:4,0,el('div',{class:'pcol up'}, el('h3',{text:'Mounts '}, el('small',{class:'muted',text:mounts.map(x=>x.name).join(' · ')})), this.powerList(mounts.flatMap(x=>[...x.powers,...x.traits]))));
+    if(mounts.length) columns.splice(petList.length?5:4,0,el('div',{class:'pcol up',dataset:{role:'mounts'}}, el('h3',{text:'Mounts '}, el('small',{class:'muted',text:mounts.map(x=>x.name).join(' · ')})), this.powerList(mounts.flatMap(x=>[...x.powers,...x.traits]))));
     const rest=all.filter(p=>!seen.has(p.id));
-    if(rest.length) columns.push(el('div',{class:'pcol u3'}, el('h3',{text:'Other'}), this.powerList(rest)));
+    if(rest.length) columns.push(el('div',{class:'pcol u3',dataset:{role:'other'}}, el('h3',{text:'Other'}), this.powerList(rest)));
     const itemPw=this.itemAttacks();
     // a worn item's powers join the column of their kind
     for(const x of itemPw.filter(x=>x.col!=='items')){ const c=columns.find(c=>c.querySelector('h3')?.firstChild?.textContent.trim()===x.col); if(c){ c.querySelector('.prows')?.querySelector(':scope > p.muted')?.remove(); c.append(x.node); } }
     const items=itemPw.filter(x=>x.col==='items').map(x=>x.node);
-    if(items.length) columns.push(el('div',{class:'pcol ui'}, el('h3',{text:'Consumables '}, el('small',{class:'muted',text:items.length})), ...items));
+    if(items.length) columns.push(el('div',{class:'pcol ui',dataset:{role:'items'}}, el('h3',{text:'Consumables '}, el('small',{class:'muted',text:items.length})), ...items));
     // conditions and effects
     const cSel=el('select',{'aria-label':'Condition'}, ...CONDITIONS.map(c=>el('option',{text:c})));
     const cNote=el('input',{type:'text',placeholder:'note (e.g. 5 fire)',class:'detin short'});
@@ -445,7 +445,9 @@ Object.assign(Builder,{
         el('span',{text:'Vision'}), el('b',{text:sp(race,'Vision')||'Normal'}),
         P.manifest ? el('span',{text:'Manifestation'}) : null, P.manifest ? el('b',{text:P.manifest}) : null),
       el('h4',{text:'Bonuses that only count sometimes'}), condList);
-    return [el('div',{class:'pcols'}, ...columns), el('div',{class:'cols2'}, condCard, defCard)];
+    const wrap=el('div',{class:'pcols planed'}, ...columns);
+    requestAnimationFrame(()=>layoutPowerCols(wrap));
+    return [wrap, el('div',{class:'cols2'}, condCard, defCard)];
   },
 
   sheetPowers(){
@@ -1147,3 +1149,37 @@ Object.assign(Builder,{
     return out;
   },
 });
+
+/* The power columns: At-will, Encounter and Daily always side by side, in that order. The other groups (Utility,
+   Companions and Mounts one under the other, Consumables, Other) each go into whichever column is shortest at that
+   point, so the whole takes as little height as it can. When Companions and Mounts together would make their column
+   taller than the first three, the smaller of the two goes under Utility instead. */
+function layoutPowerCols(wrap){
+  if(!wrap.isConnected) return;
+  const blocks=[...wrap.querySelectorAll(':scope > .pcol, :scope > .plane > .pcol')];
+  const W=wrap.clientWidth, GAP=10, n=Math.max(3, Math.floor((W+GAP)/(250+GAP)));
+  const lanes=[...Array(n)].map(()=>el('div',{class:'plane'}));
+  wrap.classList.add('laned'); wrap.replaceChildren(...lanes);
+  const by=r=>blocks.find(b=>b.dataset.role===r);
+  // measure each block at the column width
+  lanes.forEach((l,i)=>{ if(i>2) return; const b=by(['atwill','encounter','daily'][i]); if(b) l.append(b); });
+  const rest=blocks.filter(b=>!['atwill','encounter','daily'].includes(b.dataset.role));
+  rest.forEach(b=>lanes[0].append(b));
+  const h=new Map(blocks.map(b=>[b,b.offsetHeight]));
+  rest.forEach(b=>b.remove());
+  const H=lanes.map(l=>[...l.children].reduce((t,b,i)=>t+h.get(b)+(i?GAP:0),0));
+  const shortest=()=>H.reduce((bi,v,i)=>v<H[bi]?i:bi,0);
+  const put=(b,i)=>{ H[i]+=h.get(b)+(lanes[i].children.length?GAP:0); lanes[i].append(b); return i; };
+  const top=Math.max(H[0],H[1],H[2]);
+  let uLane=null; const u=by('utility'); if(u) uLane=put(u,shortest());
+  const pc=by('pets'), mo=by('mounts');
+  if(pc && mo){
+    const i=shortest(), both=h.get(pc)+GAP+h.get(mo);
+    if(H[i]+(H[i]?GAP:0)+both>top && uLane!=null){ const [small,big]=h.get(pc)<=h.get(mo)?[pc,mo]:[mo,pc]; put(small,uLane); put(big,shortest()); }
+    else { put(pc,i); put(mo,i); }
+  } else if(pc||mo) put(pc||mo,shortest());
+  for(const r of ['items','other']){ const b=by(r); if(b) put(b,shortest()); }
+}
+let _plTimer=null;
+addEventListener('resize',()=>{ clearTimeout(_plTimer); _plTimer=setTimeout(()=>document.querySelectorAll('.planed').forEach(layoutPowerCols),150); });
+
