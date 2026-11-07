@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '0.99.78';
+const APP_VERSION = '0.99.79';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -486,12 +486,12 @@ function sanitize(html){
 // Book titles ("Dragon Magazine 380", "Player's Handbook") are matched first and left alone.
 function termIndex(){
   if(S.terms) return S.terms;
-  const exact=new Map(), loose=new Map(), titles=new Set();
+  const exact=new Map(), loose=new Map(), titles=new Set(), dis=new Map();
   // diseases a monster passes on ("level 8 mummy rot") open their own entry too
   for(const [cat,c] of Object.entries(lib)){
     if(!/^disease$/i.test(cat)) continue;
     const ni=nameCol(c);
-    for(const r of c.rows){ const n=String(r[ni]).trim(); if(n.length>=6 && !loose.has(n.toLowerCase())) loose.set(n.toLowerCase(),[cat,r[0]]); }
+    for(const r of c.rows){ const n=String(r[ni]).trim(); dis.set(n.toLowerCase(),[cat,r[0]]); if(n.length>=6 && !loose.has(n.toLowerCase())) loose.set(n.toLowerCase(),[cat,r[0]]); }
   }
   for(const [cat,c] of Object.entries(lib)){
     if(!/glossary/i.test(cat)) continue;
@@ -508,7 +508,7 @@ function termIndex(){
   const words=[...new Set([...exact.keys(), ...loose.keys(), ...titles].map(w=>w.toLowerCase()))]
     .sort((a,b)=>b.length-a.length).map(escRe);
   const re = words.length ? new RegExp('(?<![\\w-])('+words.join('|')+')(?![\\w-])','gi') : null;
-  return S.terms={exact, loose, titles, re};
+  return S.terms={exact, loose, titles, re, dis};
 }
 
 // ordinary phrases that start with a rules word but don't mean it
@@ -530,6 +530,9 @@ function showDice(root){
 function linkTerms(root, selfKey){
   showDice(root);
   const T=termIndex(); if(!T.re) return;
+  // a monster's own version of a disease ("filth fever" in the Dire Rat opens "Dire Rat Filth Fever")
+  const h1=root.querySelector('h1.monster'), who=h1 ? String(h1.firstChild && h1.firstChild.nodeValue || '').trim().toLowerCase() : '';
+  const own=low=>{ if(!who) return null; for(const n of [who, who.replace(/\s*\(.*\)$/,''), who.split(',')[0]]){ const d=T.dis.get(n+' '+low); if(d) return d; } return null; };
   const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes=[];
   while(w.nextNode()){ const n=w.currentNode; if(!n.parentElement.closest('h1,.term,.publishedIn,.empty,.notice')) nodes.push(n); }
   for(const n of nodes){
@@ -538,7 +541,8 @@ function linkTerms(root, selfKey){
       const word=m[0], low=word.toLowerCase();
       if(T.titles.has(low)) continue;                                   // a book title: leave as text
       if(NOT_TERMS.some(r=>r.test(t.slice(m.index)))) continue;          // "Pick up an item" is not the Pick weapon group
-      const hit = T.exact.get(word) || T.loose.get(low);
+      let hit = T.exact.get(word) || T.loose.get(low);
+      if(hit && /^disease$/i.test(hit[0])) hit = own(low) || hit;
       if(!hit || hit[0]+':'+hit[1]===selfKey) continue;
       frag ||= document.createDocumentFragment();
       frag.append(t.slice(last,m.index));
