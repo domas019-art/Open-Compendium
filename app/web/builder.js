@@ -182,6 +182,7 @@ const Builder={
   /* ---------- availability ---------- */
   // the character's campaign decides which books may be used
   bookOk(elm){
+    if(elm && elm.hb) return true;   // homebrew: in use while its pack is in the Homebrew folder
     const c=this.ch.campaign; if(!c || !c.books) return true;
     const src=sourcesOf(elm); if(!src.length) return true;
     if(!this._en || this._enFor!==c.books){ this._en=new Set(c.books); this._enFor=c.books; }
@@ -279,6 +280,7 @@ const Builder={
   hbWhy(slot,id){
     if(slot.extra) return 'extra house-rule slot';
     const e=RULES.db.els[id]; if(!e) return '';
+    if(hbPackOf(e)) return (e.hb && !e.hbReplaces ? 'homebrew from ' : 'changed by homebrew ')+hbPackOf(e);
     if(isHouseRule(e)) return 'house rule';
     if(!prereqOk(e,this.st)) return 'prerequisites not met';
     if(!this.bookOk(e)) return 'book not in this campaign';
@@ -437,7 +439,7 @@ const Builder={
     kill.onchange=()=>this.setKilled(c,kill.checked);
     const P=Portraits.of(c);
     const pic=c.portrait && !c.portraitBlank ? pictureImg(P,'cthumb','',img=>img.remove()) : null;
-    const card=el('div',{class:'ccard'+(cur?' on':'')+(c.killed?' dead':''),draggable:'true',title:'Drag onto a folder to move it'},
+    const card=el('div',{class:'ccard'+(cur?' on':'')+(c.killed?' dead':'')+(pic?' haspic':''),draggable:'true',title:'Drag onto a folder to move it'},
       el('div',{class:'ctop'}, el('label',{class:'killchk',title:'Killed: moves the character to the Killed folder (untick to bring them back)'}, kill, el('span',{text:'Killed'})),
         el('span',{style:'flex:1'}), pic),
       el('div',{}, el('b',{class:'cname',text:c.name||'Unnamed'}), c.homebrew?el('span',{class:'hb small',text:'HB'}):null),
@@ -966,11 +968,12 @@ const Builder={
   },
 
   /* ---------- showing an element: compendium entry if there is one, otherwise the builder's own text ---------- */
-  renderElement(box,rid){
-    const e=RULES.db?.els[rid]; if(!e){ box.textContent='(not found)'; return; }
+  renderElement(box,rid,obj){
+    const e=obj||RULES.db?.els[rid]; if(!e){ box.textContent='(not found)'; return; }
     if(e.added){ renderPatron(box,e); return; }
     if(e.type==='Magic Item'){ box.replaceChildren(); renderItemCard(box,e,0); linkTerms(box,''); return; }
-    const ref=compendiumRef(e);
+    // homebrew (new, or an official entry a pack replaced) shows its own text: the book's would be wrong
+    const ref=e.hb ? null : compendiumRef(e);
     if(ref){ renderInto(box,ref[0],ref[1]); stripRevisions(box); return; }
     box.replaceChildren();
     const usage=(e.spec['Power Usage']||'').toLowerCase();
@@ -982,12 +985,13 @@ const Builder={
     const pre=readablePre(e);
     if(pre) box.append(el('p',{},el('b',{text:'Prerequisite: '}),pre));
     for(const [k,v] of Object.entries(e.type==='Power' && this.st?.granted.has(e.id) ? modSpec(e,this.st) : e.spec)){
-      if(k[0]==='_' || ['Display','Class','Level','Power Usage','Short Description','type','Type','Container'].includes(k) || /^ID_/.test(v)) continue;
+      if(k[0]==='_' || ['Display','Class','Level','Power Usage','Power Type','Short Description','type','Type','Container'].includes(k) || /^ID_/.test(v)) continue;
       box.append(...specRow(k,v));
     }
     if(e.text){ for(const para of e.text.split(/\n\s*/)) if(para.trim()) box.append(el('p',{text:para.trim()})); }
     else if(e.spec['Short Description']) box.append(el('p',{text:e.spec['Short Description']}));
-    box.append(el('p',{class:'publishedIn',text:e.source && e.source!=='Core' ? 'Published in '+e.source+'.' : 'Core rules.'}));
+    box.append(el('p',{class:'publishedIn',text:e.hb && !e.hbReplaces ? 'Homebrew, from the pack '+e.hb+'.'
+      : (e.source && e.source!=='Core' ? 'Published in '+e.source+'.' : 'Core rules.')+(e.hb ? ' Changed by the homebrew pack '+e.hb+'.' : '')}));
     linkTerms(box,'');
   },
 
@@ -1156,6 +1160,7 @@ function featGroup(e){
 }
 // Classes and races: Player's Handbook 1-3, then Essentials, then everything else
 function bookGroup(e){
+  if(e.hb || e.hbMod) return 'Homebrew';          // new or changed by a homebrew pack: in a group of its own
   const src=(e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core')[0]||'';
   if(/^Player's Handbook( [23])?$/.test(src)) return src;
   if(/Player Essentials|Heroes of the Fallen Lands|Heroes of the Forgotten Kingdoms|Heroes of Shadow|Red Box/.test(src)) return 'Essentials';
@@ -1170,12 +1175,12 @@ function minLevelFor(e){
   return n;
 }
 // Group by the actual book: Player's Handbooks first, then Essentials, then the rest alphabetically
-function sourceGroup(e){ if(e.group) return e.group; return (e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core')[0]||'Core rules'; }
+function sourceGroup(e){ if(e.group) return e.group; if(e.hb || e.hbMod) return 'Homebrew'; return (e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core')[0]||'Core rules'; }
 function sourceGroupSort(a,b){
   // a group like "Dark Sun: …" right after its book ("Dark Sun Campaign Setting")
   const ga=/^([^:]+):/.exec(a)?.[1], gb=/^([^:]+):/.exec(b)?.[1];
   if(ga && b.startsWith(ga) && !gb) return 1; if(gb && a.startsWith(gb) && !ga) return -1;
-  const rank=x=>/^Player's Handbook( [23])?$/.test(x) ? 0 : /Player Essentials|Heroes of the Fallen Lands|Heroes of the Forgotten Kingdoms|Heroes of Shadow/.test(x) ? 1 : /^(Dragon|Dungeon) Magazine/.test(x) ? 3 : 2;
+  const rank=x=>x==='Homebrew' ? 4 : /^Player's Handbook( [23])?$/.test(x) ? 0 : /Player Essentials|Heroes of the Fallen Lands|Heroes of the Forgotten Kingdoms|Heroes of Shadow/.test(x) ? 1 : /^(Dragon|Dungeon) Magazine/.test(x) ? 3 : 2;
   return rank(a)-rank(b) || a.localeCompare(b,undefined,{numeric:true});
 }
 /* A magic item the way the original builder's shop shows it: this exact item (one level), its set and set bonuses,
@@ -1244,7 +1249,7 @@ function boldLabels(txt){
 // other deity yet, "~...", "ID_...") is left out
 function readablePre(e){
   const t=(e.ppre||e.pre||'').replace(/\s+/g,' ').trim();
-  if(!t || /^~/.test(t) || /^ID_/.test(t)) return '';
+  if(!t || /^~/.test(t) || /^ID_/.test(t) || /^unselectable$/i.test(t)) return '';   // "Unselectable": the builder's own marker for powers features give
   return t.split(/\s*,\s*/).filter(c=>c && !/^!/.test(c) && !/^ID_/.test(c)).join(', ');
 }
 function renderPowerCard(box,e){
@@ -1279,7 +1284,10 @@ function renderPatron(box,e){
   box.append(el('p',{class:'publishedIn',text:e.source ? 'Described in the '+e.source+'.' : ''}));
 }
 // options written as house rules (not from a published book), like the Oversized Weapon Grip feat
+// (homebrew from a pack is not a house rule here: it is offered like everything else, and only marked HB)
 const isHouseRule=e=>!!(e && (sp(e,'_Homebrew') || /house rules?/i.test(e.source||'')));
+// which homebrew pack made or changed an entry ('' = none)
+const hbPackOf=e=>e ? (e.hb || (e.hbMod||[]).join(', ')) : '';
 // a small coloured mark for a power: green at-will, red encounter, black daily (the original's colours)
 function hexToHsl(hex){
   const n=parseInt(hex.slice(1),16), r=(n>>16&255)/255, g=(n>>8&255)/255, b=(n&255)/255, mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2;
@@ -1325,7 +1333,7 @@ const ALIGN9={
   'Lawful Good':{base:'Lawful Good',core:true}, 'Neutral Good':{base:'Good',core:true}, 'Chaotic Good':{base:'Good'},
   'Lawful Neutral':{base:'Unaligned'}, 'True Neutral':{base:'Unaligned',core:true}, 'Chaotic Neutral':{base:'Unaligned'},
   'Lawful Evil':{base:'Evil'}, 'Neutral Evil':{base:'Evil',core:true}, 'Chaotic Evil':{base:'Chaotic Evil',core:true}};
-const BOOK_GROUPS=["Player's Handbook","Player's Handbook 2","Player's Handbook 3",'Essentials','Other books'];
+const BOOK_GROUPS=["Player's Handbook","Player's Handbook 2","Player's Handbook 3",'Essentials','Other books','Homebrew'];
 const bookGroupSort=(a,b)=>BOOK_GROUPS.indexOf(a)-BOOK_GROUPS.indexOf(b);
 const GROUP_FIRST=['Racial Feats','Class Feats','Heroic Tier Feats','Paragon Tier Feats','Epic Tier Feats'];
 function groupSort(a,b){ const ia=GROUP_FIRST.indexOf(a), ib=GROUP_FIRST.indexOf(b);
@@ -1428,7 +1436,7 @@ $('#picker').addEventListener('close',()=>closePop());
 
 /* ---------- start-up (runs after all scripts are loaded) ---------- */
 (async()=>{
-  await loadLibrary();
+  await loadLibrary(); coreNotice();
   await Builder.init();
   if(Object.keys(lib).length || RULES.db) start(); else noLibrary();
   colourAllFromFolder();

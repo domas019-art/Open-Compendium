@@ -41,37 +41,121 @@ const RULES = {
         if(rules.length || cats.length || spec){ raw[at[o.id]]={...m, rules:[...(m.rules||[]),...rules], cats:[...(m.cats||[]),...cats], spec:{...(o.spec||{}),...(m.spec||{})}}; n++; }
       }
     }
-    this.use(raw); return n;
+    raw=this.applyOps(raw, add.ops);
+    this.use(raw); return n+add.ops.length;
   },
+  /* A .part file (CBLoader's format) holds entries (RulesElement) and changes to entries that already exist:
+     AppendNodes adds to one (categories, rules, details), RemoveNodes takes things away from it, DeleteElement
+     removes it. Entries come back as the list; the changes as list.ops, applied with applyOps. */
   parse(text, part){
     const doc=new DOMParser().parseFromString(text,'application/xml');
     if(doc.getElementsByTagName('parsererror').length) throw new Error('The builder file could not be read as XML.');
-    const out=[];
+    const out=[], ops=[];
     for(const e of doc.documentElement.children){
-      if(e.tagName!=='RulesElement') continue;
-      const id=e.getAttribute('internal-id'); if(!id) continue;
-      const o={id, name:e.getAttribute('name')||'', type:e.getAttribute('type')||'', source:e.getAttribute('source')||''};
-      const spec={}, rules=[]; let text='';
-      for(const n of e.childNodes){
-        if(n.nodeType===3){ text+=n.nodeValue; continue; }
-        if(n.nodeType!==1) continue;
-        const t=n.tagName;
-        if(t==='Category') o.cats=(n.textContent||'').split(',').map(x=>x.trim()).filter(Boolean);
-        else if(t==='Prereqs') o.pre=(n.textContent||'').trim();
-        else if(t==='print-prereqs') o.ppre=(n.textContent||'').trim();
-        else if(t==='Flavor') o.flavor=(n.textContent||'').trim();
-        else if(t==='specific'){ const k=n.getAttribute('name'), v=(n.textContent||'').trim(); if(k && v) spec[k]=v; }
-        else if(t==='rules'){
-          for(const r of n.children){ const a={}; for(const at of r.attributes) a[at.name.toLowerCase()]=at.value; rules.push([r.tagName.toLowerCase(),a]); }
-        }
+      const tag=e.tagName, id=e.getAttribute('internal-id'); if(!id) continue;   // (MassAppend has ids instead: below)
+      if(tag==='RulesElement'){
+        const o={id, name:e.getAttribute('name')||'', type:e.getAttribute('type')||'', source:e.getAttribute('source')||''};
+        Object.assign(o,this.readBody(e)); out.push(o);
       }
-      if(Object.keys(spec).length) o.spec=spec;
-      if(rules.length) o.rules=rules;
-      text=text.trim(); if(text) o.text=text;
-      out.push(o);
+      else if(tag==='AppendNodes') ops.push({op:'append', id, ...this.readBody(e,true)});
+      else if(tag==='RemoveNodes') ops.push({op:'remove', id, ...this.readRemove(e)});
+      else if(tag==='DeleteElement') ops.push({op:'delete', id});
     }
-    if(!out.length && !part) throw new Error('No rules found in that file.');
+    // MassAppend (CBLoader): the same additions to many entries at once, ids="a, b, c"
+    for(const e of doc.documentElement.children) if(e.tagName==='MassAppend'){
+      const body=this.readBody(e,true);
+      for(const id of (e.getAttribute('ids')||'').split(',').map(x=>x.trim()).filter(Boolean)) ops.push({op:'append', id, ...body});
+    }
+    if(!out.length && !ops.length && !part) throw new Error('No rules found in that file.');
+    out.ops=ops;
     return out;
+  },
+  // RemoveNodes, as CBLoader does it: <Category/> clears all categories, <rules/> all rules, <specific name="x"/>
+  // that detail, <Prereqs/> <print-prereqs/> <Flavor/> those, <MainText/> the text
+  readRemove(e){
+    const o={spec:{}};
+    for(const n of e.children){
+      const t=n.tagName.toLowerCase();
+      if(t==='category') o.clearCats=true; else if(t==='rules') o.clearRules=true; else if(t==='maintext') o.clearText=true;
+      else if(t==='specific' && n.getAttribute('name')) o.spec[n.getAttribute('name')]='';
+      else if(t==='prereqs') o.clearPre=true; else if(t==='print-prereqs') o.clearPpre=true; else if(t==='flavor') o.clearFlavor=true;
+    }
+    return o;
+  },
+  // what is inside an entry: categories, prerequisites, details ("specific"), rules and the text
+  readBody(e, keepEmpty){
+    const o={}, spec={}, rules=[]; let text='';
+    for(const n of e.childNodes){
+      if(n.nodeType===3){ text+=n.nodeValue; continue; }
+      if(n.nodeType!==1) continue;
+      const t=n.tagName;
+      if(t==='Category') o.cats=[...(o.cats||[]), ...(n.textContent||'').split(',').map(x=>x.trim()).filter(Boolean)];
+      else if(t==='Prereqs') o.pre=(n.textContent||'').trim();
+      else if(t==='print-prereqs') o.ppre=(n.textContent||'').trim();
+      else if(t==='Flavor') o.flavor=(n.textContent||'').trim();
+      else if(t==='specific'){ const k=n.getAttribute('name'), v=(n.textContent||'').trim(); if(k && (v || keepEmpty)) spec[k]=v; }
+      else if(t==='rules'){
+        for(const r of n.children){ const a={}; for(const at of r.attributes) a[at.name.toLowerCase()]=at.value; rules.push([r.tagName.toLowerCase(),a]); }
+      }
+    }
+    if(Object.keys(spec).length) o.spec=spec;
+    if(rules.length) o.rules=rules;
+    text=text.trim(); if(text) o.text=text;
+    return o;
+  },
+  /* the changes of a .part to entries that already exist. An entry is never changed in place: it is copied first,
+     so the rules as they were before (RULES.base, without homebrew) stay as they were. `by` marks what changed it. */
+  applyOps(raw, ops, by, newIds){
+    if(!ops || !ops.length) return raw;
+    const at={}; raw.forEach((o,i)=>at[o.id]=i);
+    const key=r=>JSON.stringify(r);
+    for(const p of ops){
+      const i=at[p.id]; if(i===undefined) continue;
+      if(p.op==='delete'){ raw[i]=null; delete at[p.id]; continue; }
+      const m={...raw[i], cats:[...(raw[i].cats||[])], rules:[...(raw[i].rules||[])], spec:{...(raw[i].spec||{})}}; delete m._cs;
+      if(p.op==='append'){
+        for(const c of p.cats||[]) if(!m.cats.includes(c)) m.cats.push(c);
+        const has=new Set(m.rules.map(key)); for(const r of p.rules||[]) if(!has.has(key(r))) m.rules.push(r);
+        Object.assign(m.spec,p.spec||{});
+        if(p.pre) m.pre=p.pre; if(p.ppre) m.ppre=p.ppre; if(p.flavor) m.flavor=p.flavor;
+        if(p.text && !(m.text||"").includes(p.text)) m.text=(m.text?m.text+"\n":"")+p.text;
+      } else {
+        if(p.clearCats) m.cats=[]; if(p.clearRules) m.rules=[]; if(p.clearText) delete m.text;
+        if(p.clearPre) delete m.pre; if(p.clearPpre) delete m.ppre; if(p.clearFlavor) delete m.flavor;
+        for(const k of Object.keys(p.spec||{})) delete m.spec[k];
+      }
+      // a pack that only lists one of its own new entries in an official entry's categories (a new class among
+      // Athletics' class skills, say) leaves the official entry as it was for everyone else: it is not marked
+      const onlyOwn=p.op==='append' && newIds && (p.cats||[]).length && (p.cats||[]).every(c=>newIds.has(c))
+        && !(p.rules||[]).length && !Object.keys(p.spec||{}).length && !p.pre && !p.ppre && !p.flavor && !p.text;
+      if(by && !onlyOwn) m.hbMod=[...new Set([...(m.hbMod||[]),by])];
+      raw[i]=m;
+    }
+    return raw.filter(Boolean);
+  },
+
+  /* ---------- homebrew ----------
+     A homebrew pack is a .part file in Libraries\Homebrew, made in the program's Homebrew workshop (or by hand, or
+     an old one from the original builder's community). Its entries go on top of everything else: a new entry is
+     added, one with the ID of an existing entry replaces it, and AppendNodes / RemoveNodes / DeleteElement change
+     existing ones. RULES.base keeps the rules without homebrew, so a pack can be put on again after every change. */
+  base:null, packs:[],
+  applyHomebrew(packs){
+    if(!this.base) this.base=this.raw||[];
+    this.packs=packs;
+    let raw=[...this.base];
+    const baseIds=new Set(this.base.map(o=>o.id)), newIds=new Set();
+    for(const p of packs){
+      let els; try{ els=this.parse(p.text,true); p.error=''; }catch(e){ p.error=e.message; continue; }
+      const at={}; raw.forEach((o,i)=>at[o.id]=i);
+      for(const o of els){
+        o.hb=p.name; if(!baseIds.has(o.id)) newIds.add(o.id);
+        if(o.id in at){ if(baseIds.has(o.id)) o.hbReplaces=true; raw[at[o.id]]=o; } else { at[o.id]=raw.length; raw.push(o); }
+      }
+      raw=this.applyOps(raw, els.ops, p.name, newIds);
+      p.count=els.length+els.ops.length;
+    }
+    this.use(raw);
   },
 
   // Build the lookup tables.
@@ -105,8 +189,10 @@ let OPTIONAL_DETAILS=[];
    magic item value tables, Charge and Unarmed, combat actions, conditions, durations, Optional Details, the full
    names of the compendium's book codes and renamed builder books. Without the file these are simply empty. */
 const CORE_FALLBACK_XP=[];
+let CORE_LOADED=false;   // false: no core library was found (the program says so)
 function applyCore(list){
   list=Array.isArray(list)?list:[];
+  CORE_LOADED=list.length>0;
   const of=type=>list.filter(o=>o.type===type), sp2=(o,k)=>(o.spec||{})[k]||'';
   const nums=s=>String(s||'').split(',').map(x=>+x.trim()).filter(x=>!isNaN(x));
   const pb=list.find(o=>o.id==='ID_OCC_POINT_BUY');
@@ -125,6 +211,18 @@ function applyCore(list){
   CONDITIONS=of('Condition').map(o=>o.name); DURATIONS=of('Effect Duration').map(o=>o.name);
   OPTIONAL_DETAILS=of('Optional Detail').map(o=>{ const ids=String(sp2(o,'IDs')).split(',').map(x=>x.trim()).filter(Boolean);
     return {key:sp2(o,'Key'), id:ids.length===1?ids[0]:'', ids:ids.length>1?ids:undefined, name:o.name, text:o.text||'', homebrew:/^yes$/i.test(sp2(o,'Homebrew'))}; }).filter(o=>o.key);
+  const md=list.find(o=>o.id==='ID_OCC_MONSTER_DAMAGE'), mo=list.find(o=>o.id==='ID_OCC_MONSTER_DAMAGE_OLD'), mm=list.find(o=>o.id==='ID_OCC_MONSTER_MATH');
+  const strs=s=>String(s||'').split(',').map(x=>x.trim()).filter(Boolean);
+  MONSTER_MATH = md && mo && mm ? {
+    single:strs(sp2(md,'Single')), multi:strs(sp2(md,'Multiple')),
+    oldBands:strs(sp2(mo,'Levels')).map(b=>b.split('-').map(Number)),
+    oldCols:['Low','Medium','High','Limited Low','Limited Medium','Limited High'].map(k=>strs(sp2(mo,k))),
+    brute:+sp2(mm,'Brute')||1, limited:+sp2(mm,'Limited')||1, minion:+sp2(mm,'Minion')||0.5, effectFloor:+sp2(mm,'Effect Floor')||1,
+    baseAC:Object.fromEntries(strs(sp2(mm,'Base AC')).map(x=>{ const m=/^(.*?)\s+(-?\d+)$/.exec(x); return m?[m[1],+m[2]]:[x,14]; })), baseNAD:+sp2(mm,'Base Other Defenses')||12,
+    eliteDefense:+sp2(mm,'Elite Defenses')||0, soloHp:[+sp2(mm,'Solo Hit Points Base')||0, +sp2(mm,'Solo Hit Points Per Level')||0, +sp2(mm,'Solo Hit Points Multiplier')||0, +sp2(mm,'Solo Hit Points Old Multiplier')||0], preMM2:strs(sp2(mm,'Pre-MM2 Books'))
+  } : null;
+  if(typeof MonsterMath!=='undefined') MonsterMath.reset();
+  const ml=typeof document!=='undefined' && document.getElementById('mathLbl'); if(ml) ml.hidden=!MONSTER_MATH;   // no switch without the rules
   BOOK_NAMES={}; for(const o of of('Book')) if(sp2(o,'Code')) BOOK_NAMES[sp2(o,'Code')]=o.name;
   RENAMED_BOOKS={}; for(const o of of('Renamed Book')) if(sp2(o,'Old Name')) RENAMED_BOOKS[sp2(o,'Old Name')]=o.name;
 }

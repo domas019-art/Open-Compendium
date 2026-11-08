@@ -52,6 +52,37 @@
     <specific name="Values">360, 520, 680, 840, 1000, 1800, 2600, 3400, 4200, 5000, 9000, 13000, 17000, 21000, 25000, 45000, 65000, 85000, 105000, 125000, 225000, 325000, 425000, 525000, 625000, 1125000, 1625000, 2125000, 2625000, 3125000</specific>
     Price in gold of a typical magic item of levels 1 to 30, used for starting money above 1st level.
   </RulesElement>
+  <!-- Monster math: older monsters with the newer numbers (the compendium switch, DM tools) -->
+  <RulesElement name="Monster Damage by Level" type="Core Table" internal-id="ID_OCC_MONSTER_DAMAGE" source="Open Compendium Core">
+    <specific name="Single">1d8 + 4, 1d8 + 5, 1d8 + 6, 2d6 + 5, 2d6 + 6, 2d6 + 7, 2d8 + 6, 2d8 + 7, 2d8 + 8, 2d8 + 9, 3d6 + 9, 3d6 + 10, 3d6 + 11, 3d6 + 12, 3d6 + 13, 3d8 + 11, 3d8 + 12, 3d8 + 13, 3d8 + 14, 3d8 + 15, 4d6 + 15, 4d6 + 16, 4d6 + 17, 4d6 + 18, 4d6 + 19, 4d8 + 16, 4d8 + 17, 4d8 + 18, 4d8 + 19, 4d8 + 20</specific>
+    <specific name="Multiple">1d6 + 3, 1d6 + 4, 1d6 + 5, 1d8 + 5, 1d8 + 6, 1d8 + 6, 2d6 + 4, 2d6 + 5, 2d6 + 6, 2d6 + 6, 2d6 + 7, 2d8 + 6, 2d8 + 7, 2d8 + 7, 2d8 + 8, 3d6 + 8, 3d6 + 9, 3d6 + 9, 3d6 + 10, 3d6 + 11, 3d8 + 9, 3d8 + 9, 3d8 + 10, 3d8 + 11, 3d8 + 12, 4d6 + 11, 4d6 + 12, 4d6 + 13, 4d6 + 14, 4d6 + 15</specific>
+    Damage for levels 1 to 30: one target, and two or more targets (Dungeon Master's Kit, page 108, the 2010 damage that the newer monsters use).
+  </RulesElement>
+  <RulesElement name="Original Monster Damage by Level" type="Core Table" internal-id="ID_OCC_MONSTER_DAMAGE_OLD" source="Open Compendium Core">
+    <specific name="Levels">1-3, 4-6, 7-9, 10-12, 13-15, 16-18, 19-21, 22-24, 25-27, 28-30</specific>
+    <specific name="Low">1d6 + 3, 1d6 + 4, 1d8 + 5, 1d8 + 5, 1d10 + 6, 1d10 + 7, 2d6 + 7, 2d6 + 8, 2d8 + 9, 2d8 + 10</specific>
+    <specific name="Medium">1d10 + 3, 1d10 + 4, 2d6 + 5, 2d6 + 5, 2d8 + 6, 2d8 + 7, 3d6 + 8, 3d6 + 8, 3d8 + 9, 3d8 + 10</specific>
+    <specific name="High">2d6 + 3, 2d8 + 4, 2d8 + 5, 3d6 + 5, 3d6 + 6, 3d8 + 7, 3d8 + 7, 4d6 + 8, 4d6 + 9, 4d8 + 10</specific>
+    <specific name="Limited Low">3d6 + 3, 3d6 + 4, 3d8 + 5, 3d8 + 5, 3d10 + 6, 3d10 + 6, 4d8 + 7, 4d8 + 8, 4d10 + 9, 4d10 + 9</specific>
+    <specific name="Limited Medium">2d10 + 3, 3d8 + 4, 3d10 + 5, 4d8 + 5, 4d8 + 6, 4d10 + 7, 4d10 + 7, 4d12 + 8, 5d10 + 9, 5d10 + 9</specific>
+    <specific name="Limited High">3d8 + 3, 3d10 + 4, 4d8 + 5, 4d10 + 5, 4d10 + 6, 4d12 + 7, 4d12 + 7, 5d10 + 8, 5d12 + 9, 5d12 + 9</specific>
+    The original Dungeon Master's Guide damage (page 42), used to see how far below its kind an older attack was.
+  </RulesElement>
+  <RulesElement name="Monster Math Rules" type="Core Table" internal-id="ID_OCC_MONSTER_MATH" source="Open Compendium Core">
+    <specific name="Base AC">Skirmisher 14, Brute 12, Soldier 16, Lurker 14, Controller 14, Artillery 12</specific>
+    <specific name="Base Other Defenses">12</specific>
+    <specific name="Brute">1.25</specific>
+    <specific name="Limited">1.25</specific>
+    <specific name="Minion">0.5</specific>
+    <specific name="Effect Floor">0.75</specific>
+    <specific name="Elite Defenses">-2</specific>
+    <specific name="Solo Hit Points Base">8</specific>
+    <specific name="Solo Hit Points Per Level">8</specific>
+    <specific name="Solo Hit Points Multiplier">4</specific>
+    <specific name="Solo Hit Points Old Multiplier">5</specific>
+    <specific name="Pre-MM2 Books">MM, DMG, H1, H2, H3, P1, P2, FRCG, FRPG, AV, MotP, Draco: Chromatic, Open Grave, PHB2, DD, Into the Shadowhaunt, Treasure of Talon Pass, Dun155, Dun156, Dun157, Dun158, Dun159, Dun160, Dun161, Dun162, Dun163, Dun164, Dun165, Dra364, Dra365, Dra366, Dra367, Dra368, Dra369, Dra370, Dra371, Dra372, Dra373, Dra374, DDN 2008-06, DDN 2008-07, DDN 2008-08, DDN 2008-09, DDN 2008-10, DDN 2008-11, DDN 2008-12, DDN 2009-01, DDN 2009-02, DDN 2009-03, DDN 2009-04</specific>
+    Brutes and encounter or recharge attacks deal more (x1.25); minions deal half of one-target damage. An older attack that dealt less than its kind (usually for an effect) keeps that cut, at most Effect Floor. Elites and solos from books before Monster Manual 2 (May 2009) lose the old +2 on the defenses that have it (2 or more above the Dungeon Master's Guide value for their role: AC level + Base AC, other defenses level + Base Other Defenses), and every solo built with the old x5 hit points (Solo Hit Points Old Multiplier times Base + Per Level x level + Constitution score, or more) gets the newer x4 (Solo Hit Points Multiplier), the standard the 2012 rules update uses when it corrects older solos.
+  </RulesElement>
   <!-- Basic attacks everyone has -->
   <RulesElement name="Charge" type="Power" internal-id="ID_OCC_CHARGE" source="Open Compendium Core">
     <specific name="Power Usage">At-Will</specific>

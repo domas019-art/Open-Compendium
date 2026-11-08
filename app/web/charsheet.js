@@ -537,7 +537,7 @@ Object.assign(Builder,{
     }
     box.append(card);
     if(calc.rows.length){
-      const t=el('table',{class:'atktable'}, el('tr',{}, el('th',{text:calc.weaponPower?'Weapon':'Attack'}), el('th',{text:'Attack'}), el('th',{text:'Damage'}), el('th',{})));
+      const t=el('table',{class:'atktable'}, el('tr',{}, el('th',{text:calc.weaponPower?'Weapon':calc.implPower?'Implement':''}), el('th',{text:'Attack'}), el('th',{text:'Damage'}), el('th',{})));
       for(const r of calc.rows){
         const how=el('tr',{class:'how',hidden:true}, el('td',{colspan:4},
           el('div',{class:'howcols'},
@@ -888,8 +888,21 @@ Object.assign(Builder,{
     const stack=parts=>{ const typed={}, out=[]; for(const x of parts){ if(!x.type){ out.push(x); continue; } if(!typed[x.type] || x.v>typed[x.type].v) typed[x.type]=x; }
       return [...out, ...Object.values(typed)].map(x=>[x.v, (x.type?x.type+' bonus - ':'bonus - ')+x.label]); };
     const condPen=(this.play().conditions.some(c=>c.name==='Prone'||c.name==='Restrained')) ? [[-2,'prone or restrained']] : [];
+    // an implement power: the implements in hand ("wand implement", "scythe implement", "light blade implement"),
+    // so Implement Expertise and the like count with the implement they name
+    const implCtx=new Set();
+    if(isImpl) for(const sl of ['main','off','symbol1','symbol2']){
+      const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); if(!it) continue;
+      const {base,magic}=itemParts(it), words=[];
+      if(magic && sp(magic,'Magic Item Type')) words.push(sp(magic,'Magic Item Type'));
+      if(base){ words.push(base.name); const m=/^(orb|rod|staff|wand|tome|totem|holy symbol|ki focus)/i.exec(base.name); if(m) words.push(m[1]);
+        for(const g of sp(base,'Group').split(/\s*,\s*/)) if(g) words.push(g); }
+      for(const w of words) implCtx.add(w.toLowerCase()+' implement');
+      // a weapon used as the implement: bonuses "through a heavy blade" (Versatile Expertise's group) count too
+      if(base && base.type==='Weapon') for(const g of sp(base,'Group').split(/\s*,\s*/)) if(g) implCtx.add(g.toLowerCase()+' group');
+    }
     const one=(w,magic,beast=beasts?.[0])=>{
-      const ctx=new Set(ctxBase);
+      const ctx=new Set([...ctxBase, ...implCtx]);
       let abil=abilities, dAbils=dmgAbils;
       // "Strength vs. AC (melee) or Dexterity vs. AC (ranged)": a ranged-only weapon uses the ranged ability
       if(w && /\(ranged/i.test(line) && !/melee/i.test(sp(w,'Weapon Category'))){ const r=/(\w+)\s+vs\.?\s*\w+\s*\(ranged/i.exec(line); if(r && ABILITIES.includes(r[1])) abil=[r[1]]; }
@@ -963,9 +976,12 @@ Object.assign(Builder,{
       // implement or no keyword: one line; an implement's enhancement counts for implement powers
       let impl=null;
       if(isImpl) for(const sl of ['main','off','symbol1','symbol2']){ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); const m=it&&itemParts(it).magic; if(m && /\+\d/.test(sp(m,'Enhancement'))){ impl=m; break; } }
-      rows.push({...one(null,impl), weapon:impl?impl.name:'—'});
+      // the implement named: the magic one, or else what is in hand (a scythe, a staff), or "none in hand"
+      let held=impl?impl.name:'';
+      if(!held && isImpl) for(const sl of ['main','off','symbol1','symbol2']){ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); if(it){ const {base,magic}=itemParts(it); held=magic&&base?itemName({ids:[base.id,magic.id]}):(base||magic)?.name||''; if(held) break; } }
+      rows.push({...one(null,impl), weapon:held || (isImpl?'none in hand':'—')});
     }
-    return {rows, weaponPower:isWeapon, note: handsNote || (abilities.length>1 && !/highest/i.test(before) ? 'This power lets you choose the ability; the best one is used.' : '')};
+    return {rows, weaponPower:isWeapon, implPower:isImpl && !isWeapon, note: handsNote || (abilities.length>1 && !/highest/i.test(before) ? 'This power lets you choose the ability; the best one is used.' : '')};
   },
 
   /* ---------- Skills & Abilities ---------- */

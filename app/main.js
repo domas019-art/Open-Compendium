@@ -197,6 +197,36 @@ function showChar(id) {
   if (info) shell.showItemInFolder(info.file); else shell.openPath(DIRS.Characters);
 }
 
+/* ---------- homebrew packs: one .part file each in Libraries\Homebrew ----------
+   The page sends the whole file; it is written under the pack's name. A pack that is deleted, or renamed (written
+   under its new name), is moved to Homebrew\Deleted, never destroyed. */
+const HOMEBREW = () => path.join(DIRS.Libraries, 'Homebrew');
+const packFile = name => path.join(HOMEBREW(), safeName(name) + '.part');
+function savePack(name, text, oldName) {
+  return queue(async () => {
+    await fsp.mkdir(HOMEBREW(), { recursive: true });
+    const file = packFile(name);
+    await writeAtomic(file, String(text));
+    if (oldName && packFile(oldName).toLowerCase() !== file.toLowerCase()) await binPack(oldName);
+    return path.basename(file);
+  });
+}
+async function binPack(name) {
+  const file = packFile(name);
+  if (!(await exists(file))) return false;
+  const bin = path.join(HOMEBREW(), 'Deleted');
+  await fsp.mkdir(bin, { recursive: true });
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  await fsp.rename(file, path.join(bin, safeName(name) + ' ' + stamp + '.part'));
+  return true;
+}
+const deletePack = name => queue(() => binPack(name));
+async function showPack(name) {
+  const file = packFile(name);
+  if (await exists(file)) shell.showItemInFolder(file);
+  else { await fsp.mkdir(HOMEBREW(), { recursive: true }); shell.openPath(HOMEBREW()); }
+}
+
 /* ---------- a new picture is copied into the portraits folder ---------- */
 async function savePicture(name, bytes) {
   await fsp.mkdir(DIRS.portraits, { recursive: true });
@@ -315,6 +345,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('chars:purge', (e, id) => purgeChar(String(id || '')));
   ipcMain.handle('chars:show', (e, id) => showChar(id));
   ipcMain.handle('picture:save', (e, name, bytes) => savePicture(name, bytes));
+  ipcMain.handle('pack:save', (e, name, text, oldName) => savePack(String(name || ''), String(text || ''), String(oldName || '')));
+  ipcMain.handle('pack:delete', (e, name) => deletePack(String(name || '')));
+  ipcMain.handle('pack:show', (e, name) => showPack(String(name || '')));
 
   createWindow();
 });

@@ -7,6 +7,14 @@ An offline compendium, character builder and character sheet for the 4th edition
 comes with is `Libraries/open-compendium-core.part`: short rules summaries and lists the program needs (point buy and
 ability arrays, Charge, combat actions, conditions, book names), written for this project, with no book text.
 
+**Homebrew.** The Homebrew tab makes your own classes and their powers, or changes official classes, without editing any
+file by hand. Everything goes into a pack (one `.part` file in `Libraries\Homebrew`) written in the original Character
+Builder's own format, so packs also work in the original builder through CBLoader, and old homebrew `.part` files load
+here. Official files are never changed, and characters using homebrew are marked HB.
+
+**Newer monster math.** A switch in the compendium shows older monsters with the damage, defenses and solo hit points of
+the Monster Manual 3 era, with a note listing what changed. The tables it uses are in the core library.
+
 ## Folders
 
 | Folder | What is in it |
@@ -48,7 +56,8 @@ install, or the update zip to unzip over an existing copy.
 ## Plans
 
 - Linux and Android versions (Windows only for now)
-- DM tools based on Masterplan: encounters, changing a monster's level, and the newer monster math for older monsters
+- More homebrew: feats, powers, magic items, backgrounds, themes and races of your own
+- DM tools based on Masterplan: encounters and changing a monster's level (using the same monster math as the compendium)
 
 ## Reporting a bug
 

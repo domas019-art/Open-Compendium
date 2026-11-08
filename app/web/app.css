@@ -25,6 +25,7 @@ header h1{font-size:17px;margin:0;letter-spacing:.02em;flex:1;white-space:nowrap
 #welcome p{color:var(--muted)}
 #welcome .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:20px 0}
 #status{color:var(--muted);font-size:13px;min-height:20px}
+#mathLbl[hidden]{display:none}
 
 /* layout: categories | list | entry */
 #app{flex:1;min-height:0;display:none;grid-template-columns:190px minmax(380px,1fr) minmax(420px,860px)}
@@ -605,9 +606,10 @@ body.sheetmode #bSheet{display:none}
 
 /* the program (Windows): version line at the foot of Start, and the "library changed" bar */
 .appver{font-size:11px; opacity:.38; text-align:right; margin:18px 4px 2px; letter-spacing:.04em; user-select:text}
-#libbar{position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:50; display:flex; gap:10px; align-items:center;
+#libbar,#corebar{position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:50; display:flex; gap:10px; align-items:center;
   background:var(--panel,#fff); color:inherit; border:1px solid var(--accent,#8f2a3a); border-radius:10px; padding:8px 12px;
   box-shadow:0 6px 24px rgba(0,0,0,.25); font-size:14px}
+#corebar{max-width:min(760px,calc(100vw - 32px)); top:auto; bottom:16px}
 
 /* Start: character folders beside the cards, killed tick, small portrait */
 .cfolders{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:start;margin-top:10px}
@@ -631,6 +633,10 @@ body.sheetmode #bSheet{display:none}
 .killchk{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
 .killchk input{margin:0;cursor:pointer}
 .cthumb{width:46px;height:58px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
+/* the portrait sits in the top right corner, beside the name, so a card with a picture is no taller than one without */
+.ccard{position:relative}
+.ccard .cthumb{position:absolute;top:10px;right:12px}
+.ccard.haspic>div:not(.brow){padding-right:56px}
 .ccard.dead{opacity:.72}
 .ccard.dead .cthumb{filter:grayscale(1)}
 .ccard.dead .killchk{color:#b3261e;font-weight:600}
@@ -727,3 +733,83 @@ dialog.askdlg p{margin:0}
 :root[data-theme=dark] .entry h1.monster ~ h2{background:#3f5e3f;color:#eef5ee}
 /* a monster's core stats: the second item on a line after a wide gap, as in the books */
 .entry span.gap{display:inline-block;width:2.5em}
+/* the two switches under the search box: one at each end */
+#controls .togglerow{flex:1 1 100%;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+/* what the newer monster math changed, under the entry */
+.entry .mathnote{margin-top:14px;padding:8px 12px;border-left:3px solid #88bb88;background:var(--stat);font-size:13px}
+.entry .mathnote b{display:block;margin-bottom:2px}
+.entry .mathnote ul{margin:2px 0 0;padding-left:18px}
+.entry .mathnote.none{border-left-color:var(--line);color:var(--muted)}
+
+/* ---------- homebrew workshop ---------- */
+#workshop{flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr}
+#wsSide{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px 10px;display:flex;flex-direction:column;gap:8px}
+#wsSide .btn{align-self:flex-start}
+.wshead{padding:0 6px}
+.wslist{display:flex;flex-direction:column;gap:2px}
+.wsrow{display:flex;align-items:center;gap:6px;width:100%;text-align:left;border:0;background:none;padding:7px 10px;border-radius:6px;cursor:pointer}
+.wsrow:hover{background:var(--hover)}
+.wsrow.on{background:var(--sel);font-weight:600}
+.wsrow .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsrow small{color:var(--muted);font-weight:400}
+#wsMain{overflow:auto;scrollbar-gutter:stable;padding:14px 16px 40px;min-width:0}
+#wsMain .stepwrap{margin:-14px -16px 12px}
+.bcard.wide{max-width:980px}
+.wsbar h3{flex:0 1 auto}
+.wsbar #wsStatus{margin-left:auto}
+.wssub{margin:16px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.wssub:first-child{margin-top:0}
+.wsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.wsgrid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.wsfield{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wsfield.full{grid-column:1/-1}
+.wsfield>span{font-size:13px;color:var(--muted)}
+.wsfield input,.wsfield select,.wsfield textarea,.wseff input,.wseff select,.wsfeat input.num{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;min-width:0}
+.wsfield textarea{resize:vertical;line-height:1.45}
+input.num{width:64px}
+.wsfeat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:var(--bg);display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.wsfeat>.wsfbox{align-self:stretch}
+.wsfeat.choice{border-style:dashed}
+.wsfeat>.wsgrid{align-self:stretch}
+.wsfbox{display:flex;flex-direction:column;gap:6px}
+.wsfbox.open{padding-bottom:4px}
+.wsfhead{margin:0}
+.wsopt{margin-left:18px;padding-left:12px;border-left:3px solid var(--line);display:flex;flex-direction:column;gap:6px;align-self:stretch}
+.wsopt>.btn,.wsfeat>.btn{align-self:flex-start}
+.wseffects{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.wseff{margin:0;align-items:center}
+.wseff .x,.chosen .x{border:0;background:none;cursor:pointer;font-size:16px;line-height:1;color:var(--muted);padding:0 4px}
+.wscoverwrap{overflow-x:auto;margin:12px 0 4px}
+table.wscover{width:auto;font-size:13px;font-variant-numeric:tabular-nums}
+table.wscover th,table.wscover td{padding:3px 7px;text-align:center;border-bottom:1px solid var(--line);position:static;cursor:default}
+table.wscover tbody th{text-align:left;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)}
+table.wscover td.zero{color:var(--muted)}
+.wswarn{border-color:#c87828}
+.wswarn ul{margin:6px 0 0;padding-left:20px}
+dialog.wsdlg{width:min(460px,92vw);padding:16px 18px}
+dialog.wsdlg h3{margin:0 0 10px}
+dialog.wsdlg .wsfield{margin-bottom:10px}
+.wsbtns{justify-content:flex-end;margin-top:12px}
+dialog.wspick{width:min(820px,96vw);height:min(720px,90vh);padding:0;flex-direction:column}
+dialog.wspick[open]{display:flex}
+dialog.wspick .pkhead h3{margin:0}
+dialog.wspick .pkhead input[type=search]{flex:1 1 220px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+dialog.wspick .pkhead select{padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.wsplist{flex:1;overflow:auto;border-bottom:1px solid var(--line)}
+dialog.wspick .wsbtns{padding:0 14px 12px}
+@media (max-width:900px){ #workshop{grid-template-columns:1fr} #wsSide{border-right:0;border-bottom:1px solid var(--line);max-height:30vh} .wsgrid,.wsgrid.four{grid-template-columns:1fr} }
+/* the power editor: the form, and the power as it will look */
+.wspower{border-color:var(--accent)}
+.wspowergrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-self:stretch}
+.wspowergrid>div{display:flex;flex-direction:column;gap:10px;min-width:0}
+.wsprev{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel);position:sticky;top:8px}
+.wsprev h1{margin-top:0}
+.pick.own{border-color:var(--accent)}
+button.linkish{border:0;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline dotted;cursor:pointer}
+.wsphead{padding:8px 14px 4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--panel);position:sticky;top:0}
+@media (max-width:1100px){ .wspowergrid{grid-template-columns:1fr} .wsprev{position:static} }
+.wsaddkw{margin-top:6px}
+.wsaddkw input{padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;width:100%;max-width:420px}
+.wskwlist{max-height:150px;overflow:auto;margin-top:6px;padding:2px 0}
+.wscustom input{flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-weight:600}
+.wscustom textarea{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}

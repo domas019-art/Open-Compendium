@@ -12,6 +12,11 @@ Your folders (next to the program)
                                 ability arrays, Charge, combat actions, conditions, book names
                                 and other lists the program needs. It has no book text and
                                 may be shared. Updates replace it.
+  Libraries\Homebrew            your homebrew packs (made in the Homebrew tab), one .part file
+                                each. Give a pack's file to someone to share it; take it out of
+                                the folder to switch it off. Homebrew\Deleted holds the packs you
+                                deleted. Old homebrew .part files from the original builder's
+                                community can go here too.
   portraits\                    pictures; any picture put here shows up in the Portrait tab
   Characters\                   your characters, one file each (saved automatically).
                                 Each folder inside is a character folder in the program
@@ -27,6 +32,13 @@ them again (at the next start, or straight away from the bar it shows). Keep the
 the core library) and the Data folder private: they contain the game content.
 
 The program never connects to the internet; every web address is refused.
+
+Homebrew
+  The Homebrew tab makes your own classes, or changes official ones (hit points, skills,
+  proficiencies, class features, builds, which powers a class can choose). Everything goes into
+  a pack in Libraries\Homebrew, in the original Character Builder's own format, so the packs
+  also work with CBLoader. The official files are never changed. Characters using homebrew are
+  marked HB.
 
 Imperial / Metric
   The button next to Light/Dark shows every measurement in feet and pounds, or in meters and

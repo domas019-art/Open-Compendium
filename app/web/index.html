@@ -14,6 +14,7 @@ try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendiu
   <nav id="tabs" style="display:none">
     <button type="button" data-tab="builder" class="on">Character Builder</button>
     <button type="button" data-tab="comp">Compendium</button>
+    <button type="button" data-tab="brew">Homebrew</button>
   </nav>
   <span style="flex:1"></span>
   <button class="btn" id="booksBtn" type="button" style="display:none">Books</button>
@@ -33,7 +34,10 @@ try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendiu
   <section id="mid">
     <div id="controls">
       <input type="search" id="q" placeholder="Search…">
-      <label title="Also look inside the full text of every entry, not just the columns shown in the list"><input type="checkbox" id="full"> search inside entries too</label>
+      <div class="togglerow">
+        <label title="Also look inside the full text of every entry, not just the columns shown in the list"><input type="checkbox" id="full"> search inside entries too</label>
+        <label id="mathLbl" title="Show older monsters with the newer monster math (Monster Manual 3 damage; Monster Manual 2 elites and solos). The rules are in the core library. The entries themselves are not changed."><input type="checkbox" id="newMath"> newer monster math</label>
+      </div>
       <span id="filters" style="display:contents"></span>
     </div>
     <div id="count"></div>
@@ -51,6 +55,8 @@ try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendiu
   <section id="bChoices"></section>
   <section id="bSheet"></section>
 </main>
+
+<main id="workshop" style="display:none"></main>
 
 <dialog id="picker">
   <div class="pkhead">
@@ -85,11 +91,13 @@ try{ document.documentElement.dataset.theme=localStorage.getItem('open-compendiu
 
 <script src="compendium.js"></script>
 <script src="rules.js"></script>
+<script src="monsters.js"></script>
 <script src="builder.js"></script>
 <script src="shop.js"></script>
 <script src="portraits.js"></script>
 <script src="manage.js"></script>
 <script src="charsheet.js"></script>
+<script src="homebrew.js"></script>
 <script src="importer.js"></script>
 <script src="units.js"></script>
 <script>document.getElementById('appTitle').title='Version '+APP_VERSION; document.getElementById('compVer').textContent='Open Compendium '+APP_VERSION;</script>

@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -43,10 +43,14 @@ const saveChars=c=>OC.saveChars(c);
    Character Builder: the merged file from CBLoader holds the core data plus every .part file as it was when
    CBLoader last ran. On top of it go our own additions file, and any .part file changed since that merge
    (a library fix made later), so the program has it without running CBLoader again. */
-const LIBRARY_READER=11;   // raised when the way the library is read changes, so it is read again
-async function loadLibrary(){
+const LIBRARY_READER=12;   // raised when the way the library is read changes, so it is read again
+// the library files the program reads and remembers (homebrew packs are read on their own, every start)
+const isHomebrewFile=f=>/^Homebrew\//i.test(f.p);
+const libraryFiles=list=>list.filter(f=>/\.(js|xml|part)$/i.test(f.p) && !isHomebrewFile(f));
+async function loadLibrary(){ await loadLibraryFiles(); await loadHomebrew(); }
+async function loadLibraryFiles(){
   let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
-  list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
+  list=libraryFiles(list);
   const sig=JSON.stringify([LIBRARY_READER, ...list.map(f=>[f.p,f.s,f.m])]);
   if(await loadKey('libsig')===sig){
     const saved=await restore(); if(saved && Object.keys(saved).length) lib=saved;
@@ -62,6 +66,34 @@ async function loadLibrary(){
     await readLibrary(list);
   }
   await saveKey('libsig',sig);
+}
+/* ---------- homebrew packs (Libraries\Homebrew\*.part, not the Deleted folder) ----------
+   Read every start and whenever they change; they are small. HOMEBREW.packs: [{name, file, text, count, error}] */
+const HOMEBREW={packs:[], sig:''};
+const packFiles=list=>list.filter(f=>isHomebrewFile(f) && /\.part$/i.test(f.p) && !/^Homebrew\/Deleted\//i.test(f.p))
+  .sort((a,b)=>a.p.localeCompare(b.p,undefined,{sensitivity:'base',numeric:true}));
+async function homebrewChanged(list){ return JSON.stringify(packFiles(list).map(f=>[f.p,f.s,f.m]))!==HOMEBREW.sig; }
+async function loadHomebrew(refresh){
+  let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){}
+  const files=packFiles(list);
+  HOMEBREW.sig=JSON.stringify(files.map(f=>[f.p,f.s,f.m]));
+  const packs=[];
+  for(const f of files){
+    let text=''; try{ const r=await fetch('/Libraries/'+f.p.split('/').map(encodeURIComponent).join('/')); if(r.ok) text=await r.text(); }catch(e){}
+    const name=f.p.split('/').pop().replace(/\.part$/i,'');
+    packs.push({name, file:f.p, text});
+  }
+  HOMEBREW.packs=packs;
+  if(RULES.raw || RULES.base) RULES.applyHomebrew(packs);
+  if(refresh) document.dispatchEvent(new Event('homebrew-changed'));
+}
+// without the core library the program still works, but the lists and tables in it are empty: say which file is missing
+function coreNotice(){
+  if(CORE_LOADED || document.getElementById('corebar')) return;
+  const bar=document.createElement('div'); bar.id='corebar'; bar.className='libbar';
+  bar.innerHTML='<span>The core library (<b>open-compendium-core.part</b>) is not in your Libraries folder. The program works, but ability score arrays and point buy, starting money, magic item values, Charge and unarmed attacks, combat actions, conditions and effect durations, optional details, full book names and the newer monster math stay empty until it is back.</span>';
+  bar.append(Object.assign(document.createElement('button'),{className:'btn small',type:'button',textContent:'OK',onclick:()=>bar.remove()}));
+  document.body.append(bar);
 }
 async function readLibrary(list){
   const status=t=>{ $('#status').textContent=t; return new Promise(r=>setTimeout(r,10)); };
@@ -194,8 +226,10 @@ function noLibrary(){
 async function libraryChangedBar(){
   if(document.getElementById('libbar')) return;
   // Windows also reports a folder as changed when files in it are only read: show the bar only for a real change
-  let list=[]; try{ list=await (await fetch('/_list/Libraries')).json(); }catch(e){ return; }
-  list=list.filter(f=>/\.(js|xml|part)$/i.test(f.p));
+  let all=[]; try{ all=await (await fetch('/_list/Libraries')).json(); }catch(e){ return; }
+  // a homebrew pack added, changed or removed (by the workshop, or a file dropped in): put the packs on again, no reload
+  if(await homebrewChanged(all)) await loadHomebrew(true);
+  const list=libraryFiles(all);
   if(JSON.stringify([LIBRARY_READER, ...list.map(f=>[f.p,f.s,f.m])])===await loadKey('libsig')) return;
   if(document.getElementById('libbar')) return;
   const bar=document.createElement('div'); bar.id='libbar';
@@ -438,10 +472,12 @@ function showTab(t){
   $('#app').style.display = t==='comp' && Object.keys(lib).length ? 'grid' : 'none';
   $('#compEmpty').hidden = !(t==='comp' && !Object.keys(lib).length);
   $('#builder').style.display = t==='builder' ? '' : 'none';
+  $('#workshop').style.display = t==='brew' ? '' : 'none';
   $('#bookPanel').hidden=true; closePop();
   $('#booksBtn').style.display = t==='comp' && S.books.length ? '' : 'none';    // the builder shows its own campaign book list there
   if(t==='comp'){ updateBooksBtn(); $('#booksBtn').title='The books the compendium shows'; }
   if(t==='builder') Builder.show();
+  if(t==='brew') Workshop.show();
 }
 
 function renderHead(){
@@ -697,7 +733,9 @@ function hangBullets(root){
 function renderInto(box, cat, id){
   const c=lib[cat], html=c.data[id];
   box.dataset.cat=cat;                                   // lets the style sheet colour by category (companions green, like monsters)
-  if(html){ box.innerHTML=sanitize(html); if(cat==='monster') unifyMonster(box); statColumns(box); hangBullets(box); }
+  // the newer monster math (the switch by the search box): the engine's version of an older monster, and what it changed
+  const mm = cat==='monster' && S.newMath && html && typeof MonsterMath!=='undefined' ? MonsterMath.update(cat,id) : null;
+  if(html){ box.innerHTML=sanitize(mm && mm.html || html); if(cat==='monster') unifyMonster(box); statColumns(box); hangBullets(box); }
   else{
     box.replaceChildren();
     const n=document.createElement('div'); n.className='notice';
@@ -706,6 +744,13 @@ function renderInto(box, cat, id){
     const h=document.createElement('h1'); h.className='player'; h.textContent=row ? row[nameCol(c)] : id;
     const p=document.createElement('p'); p.textContent=c.index[id] || '(no text available)';
     box.append(n,h,p);
+  }
+  if(S.newMath && html && cat==='monster' && box.id==='entry' && typeof MONSTER_MATH!=='undefined' && MONSTER_MATH){
+    const ch=mm ? mm.changes : [];
+    const n=document.createElement('div'); n.className='mathnote'+(ch.length?'':' none');
+    const b=document.createElement('b'); b.textContent=ch.length ? 'Newer monster math: what changed' : mm ? 'Newer monster math: nothing to change' : 'This monster already uses the newer monster math'; n.append(b);
+    if(ch.length){ const ul=document.createElement('ul'); for(const c of ch){ const li=document.createElement('li'); li.textContent=c; ul.append(li); } n.append(ul); }
+    const pub=box.querySelector('p.publishedIn'); pub ? pub.before(n) : box.append(n);
   }
   linkTerms(box, cat+':'+id);
 }
@@ -758,6 +803,11 @@ function showEntry(id){
 /* ---------- wiring ---------- */
 $('#q').oninput=e=>{ S.q=e.target.value; S.limit=300; renderList(); };
 $('#full').onchange=e=>{ S.full=e.target.checked; renderList(); };
+// the newer monster math: remembered between visits; the shown entry is drawn again
+try{ S.newMath=localStorage.getItem('open-compendium-newmath')==='1'; }catch(e){ S.newMath=false; }
+$('#newMath').checked=S.newMath;
+$('#newMath').onchange=e=>{ S.newMath=e.target.checked; try{ localStorage.setItem('open-compendium-newmath',S.newMath?'1':'0'); }catch(x){}
+  if(S.sel) showEntry(S.sel); };
 document.addEventListener('click',e=>{
   const t=e.target.closest && e.target.closest('.term');
   if(t){ if(popFor===t) closePop(); else openPop(t); return; }        // a word inside the popup opens its own popup
