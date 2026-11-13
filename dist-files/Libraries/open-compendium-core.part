@@ -542,4 +542,36 @@ The movement provokes opportunity attacks as usual. After a charge you can't tak
   <RulesElement name="The Book of Vile Darkness" type="Renamed Book" internal-id="ID_OCC_RENAMED_THE_BOOK_OF_VILE_DARKNESS" source="Open Compendium Core">
     <specific name="Old Name">The Book Of Vile Darkness</specific>
   </RulesElement>
+  <!-- Resource pools: counters shown under the action points on the character sheet. A pool shows when the character
+       has its Stat (above 0) or any entry in Granted By. Short Rest / Extended Rest: "Full" (a spent pool comes back,
+       a counter empties), a number (set to it), or nothing (kept). A pool with a Stat counts down as it is spent. -->
+  <RulesElement name="Power points" type="Resource Pool" internal-id="ID_OCC_POOL_POWER_POINTS" source="Open Compendium Core">
+    <specific name="Stat">Power Points</specific>
+    <specific name="Short Rest">Full</specific>
+    <specific name="Extended Rest">Full</specific>
+    Spent to augment at-will powers. All come back after a short or extended rest (Player's Handbook 3).
+  </RulesElement>
+  <RulesElement name="Entropy points" type="Resource Pool" internal-id="ID_OCC_POOL_ENTROPY" source="Open Compendium Core">
+    <specific name="Granted By">ID_FMP_CLASS_FEATURE_1448</specific>
+    <specific name="Short Rest">0</specific>
+    <specific name="Extended Rest">0</specific>
+    Weaver of Chance (Channel Entropy): +1 on a natural 20, -1 on a natural 1. Empty after a short or extended rest.
+  </RulesElement>
+  <RulesElement name="Soul shards" type="Resource Pool" internal-id="ID_OCC_POOL_SOUL_SHARDS" source="Open Compendium Core">
+    <specific name="Granted By">ID_FMP_CLASS_FEATURE_1931</specific>
+    <specific name="Maximum">5</specific>
+    <specific name="Extended Rest">1</specific>
+    Soul Thief (Soul Theft): gained when you reduce an enemy to 0 hit points, up to five. After an extended rest, you have one.
+  </RulesElement>
+  <RulesElement name="Shrouds on target" type="Resource Pool" internal-id="ID_OCC_POOL_SHROUDS" source="Open Compendium Core">
+    <specific name="Granted By">ID_FMP_POWER_9400</specific>
+    <specific name="Maximum">4</specific>
+    <specific name="Short Rest">0</specific>
+    <specific name="Extended Rest">0</specific>
+    <specific name="Unit">shroud</specific>
+    <specific name="Units">shrouds</specific>
+    <specific name="Damage Per Unit">1d6, 11: 1d6+3, 21: 1d6+6</specific>
+    <specific name="Fewer On A Miss">1</specific>
+    Assassin's Shroud: your shrouds on one enemy, up to four. They end with the encounter, or move to a new target.
+  </RulesElement>
 </D20Rules>

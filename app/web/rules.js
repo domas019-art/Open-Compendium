@@ -1,8 +1,9 @@
 "use strict";
 /* =====================================================================
    Rules engine for the character builder.
-   Data comes from the user's own Character Builder file
-   (combined.dnd40.merged.xml). Nothing is bundled with the app.
+   Data comes from the user's own Character Builder file (combined.dnd40.merged.xml), the homebrew packs in
+   Libraries\Homebrew, and the core library (open-compendium-core.part: tables and lists the program needs).
+   No game content is written into the program itself.
 
    How the data works, in short:
    - Every thing in the game is a "rules element" (race, class, feat, power…).
@@ -126,8 +127,9 @@ const RULES = {
       }
       // a pack that only lists one of its own new entries in an official entry's categories (a new class among
       // Athletics' class skills, say) leaves the official entry as it was for everyone else: it is not marked
-      const onlyOwn=p.op==='append' && newIds && (p.cats||[]).length && (p.cats||[]).every(c=>newIds.has(c))
-        && !(p.rules||[]).length && !Object.keys(p.spec||{}).length && !p.pre && !p.ppre && !p.flavor && !p.text;
+      // (the same for a grant of one of its own: a new weapon's proficiency under "Military Melee")
+      const onlyOwn=p.op==='append' && newIds && ((p.cats||[]).length || (p.rules||[]).length) && (p.cats||[]).every(c=>newIds.has(c))
+        && (p.rules||[]).every(([t,a])=>t==='grant' && newIds.has(a.name)) && !Object.keys(p.spec||{}).length && !p.pre && !p.ppre && !p.flavor && !p.text;
       if(by && !onlyOwn) m.hbMod=[...new Set([...(m.hbMod||[]),by])];
       raw[i]=m;
     }
@@ -183,6 +185,8 @@ const ABIL_SHORT={str:'Strength',con:'Constitution',dex:'Dexterity',int:'Intelli
 // The original builder's "Optional Details" (check all that apply), from the core library:
 // {key, id or ids, name, text, homebrew}. The key is what the program acts on (inherent, featTax, darksun...).
 let OPTIONAL_DETAILS=[];
+// Resource Pool entries: counters kept in the character sheet's bar (power points, entropy points, soul shards, shrouds...)
+let RESOURCE_POOLS=[];
 
 /* ---------- the core library (open-compendium-core.part) ----------
    Rules and lists the program needs that are not in the book libraries: point buy and ability arrays, the XP and
@@ -223,6 +227,12 @@ function applyCore(list){
   } : null;
   if(typeof MonsterMath!=='undefined') MonsterMath.reset();
   const ml=typeof document!=='undefined' && document.getElementById('mathLbl'); if(ml) ml.hidden=!MONSTER_MATH;   // no switch without the rules
+  RESOURCE_POOLS=of('Resource Pool').map(o=>{
+    const dmg=strs(sp2(o,'Damage Per Unit')).map(x=>{ const m=/^(?:(\d+):\s*)?(\d*d\d+)\s*(?:\+\s*(\d+))?$/.exec(x); return m ? {level:+(m[1]||1), per:[m[2],+(m[3]||0)]} : null; }).filter(Boolean);
+    return {key:o.id, label:o.name, stat:sp2(o,'Stat'), by:strs(sp2(o,'Granted By')), max:sp2(o,'Maximum')!=='' ? +sp2(o,'Maximum') : null,
+      shortRest:sp2(o,'Short Rest'), extendedRest:sp2(o,'Extended Rest'), tip:(o.text||'').trim(),
+      damage:dmg, unit:sp2(o,'Unit')||'point', unitPlural:sp2(o,'Units')||(sp2(o,'Unit')||'point')+'s', missLess:+sp2(o,'Fewer On A Miss')||0};
+  });
   BOOK_NAMES={}; for(const o of of('Book')) if(sp2(o,'Code')) BOOK_NAMES[sp2(o,'Code')]=o.name;
   RENAMED_BOOKS={}; for(const o of of('Renamed Book')) if(sp2(o,'Old Name')) RENAMED_BOOKS[sp2(o,'Old Name')]=o.name;
 }
@@ -243,7 +253,7 @@ const SKILLS=['Acrobatics','Arcana','Athletics','Bluff','Diplomacy','Dungeoneeri
 function evaluate(ch){
   const db=RULES.db; let prev=null;
   for(let pass=0; pass<8; pass++){
-    const st={level:Math.min(30,Math.max(1,ch.level||1)), granted:new Map(), via:new Map(), lvl:new Map(), order:[], slots:[], adds:[], texts:{}, alias:{}, replaced:new Set()};
+    const st={level:Math.min(30,Math.max(1,ch.level||1)), granted:new Map(), via:new Map(), lvl:new Map(), order:[], slots:[], adds:[], texts:{}, textList:{}, riders:[], alias:{}, replaced:new Set()};
     // at: the character level this element was gained at
     const visit=(id,via,at)=>{
       if(st.granted.has(id)) return;
@@ -253,14 +263,19 @@ function evaluate(ch){
         const lvl=+(a.level||0); if(lvl && lvl>st.level) return;
         const here=Math.max(at,lvl);
         // "WearingOffHandAxe", "WearingRod": what the character holds, checked against the equipment like "wearing"
-        const wearReq=/^Wearing/.test(a.requires||'') ? wearingReq(a.requires) : null;
-        if(a.requires && !wearReq && !reqOk(a.requires, prev)) return;
+        // (mixed with other conditions: "ID_FMP_FEAT_3522&11 level&WearingRod&WearingPactBlade")
+        const reqParts=String(a.requires||'').split('&').map(x=>x.trim()).filter(Boolean);
+        const wearParts=reqParts.filter(x=>/^Wearing/.test(x)), otherReq=reqParts.filter(x=>!/^Wearing/.test(x));
+        const wearReq=wearParts.length ? wearingReq(wearParts.join('&')) : null;
+        if(otherReq.length && !reqOk(otherReq.join('&'), prev)) return;
         if(tag==='grant') visit(a.name, id, here);
         else if(tag==='statadd') st.adds.push({stat:a.name, value:a.value, type:a.type||'', cond:a.condition, wearing:a.wearing, wearReq, notWearing:a['not-wearing'], skip:('zero' in a)||('non-zero' in a), src:id});
-        else if(tag==='textstring') st.texts[a.name]=a.value;
+        else if(tag==='textstring'){ st.texts[a.name]=a.value; (st.textList[a.name] ||= []).push({value:String(a.value||'').trim(), cond:a.condition||'', src:id});
+          // extra damage dice for some attacks ("one-hand:damage" +1d8, once per turn): shown with those attacks
+          const m=/^(.+):damage$/i.exec(a.name||''); if(m && /d\d|\d\s*\[?W\]?$/i.test(String(a.value||'').trim())) st.riders.push({quals:m[1].split(',').map(x=>x.trim().toLowerCase()), value:String(a.value).trim(), cond:a.condition||'', src:id}); }
         else if(tag==='statalias') st.alias[(a.alias||'').toLowerCase()]=a.name;
         else if(tag==='select'){
-          const slot={key:id+'#'+i, owner:id, type:a.type, number:Math.max(1,+(a.number||1)), cat:a.category||'', optional:a.optional==='true', label:a.name||'', level:here};
+          const slot={key:id+'#'+i, owner:id, type:a.type, number:Math.max(1,+(a.number||1)), cat:a.category||'', optional:a.optional==='true', label:a.name||'', level:here, spellbook:a.spellbook||''};
           st.slots.push(slot);
           let picks=ch.picks[slot.key];
           if(!picks && a.default){            // e.g. wizards get Ritual Caster unless something else is chosen
@@ -414,7 +429,8 @@ function makeStat(st,ch){
 
 /* ---------- "requires" on a rule (machine format) ---------- */
 function reqOk(expr, st){
-  return String(expr).split(',').every(part=>{
+  // "11 level&ID_FMP_CLASS_FEATURE_171": all of them (the original writes "&"; some entries use ",")
+  return String(expr).split(/[,&]/).every(part=>{
     part=part.trim(); if(!part) return true;
     let neg=false; if(part[0]==='!'){ neg=true; part=part.slice(1); }
     const any=part.split('|').some(x=>reqAtom(x.trim(),st));
@@ -425,7 +441,8 @@ function reqAtom(a,st){
   if(!st) return false;                       // first pass: nothing is known yet
   let m=/^(\d+)\s*level$/i.exec(a); if(m) return st.level>=+m[1];
   if(/^heroic tier$/i.test(a)) return st.level<11;
-  if(/^paragon tier$/i.test(a)) return st.level>=11 && st.level<21;
+  // "Paragon Tier" in a rule: 11th level or higher (Toughness: +5, +5 more at Paragon Tier, +5 more at Epic Tier = 15 at 21st)
+  if(/^paragon tier$/i.test(a)) return st.level>=11;
   if(/^epic tier$/i.test(a)) return st.level>=21;
   m=/^(.+?) Skill Training$/i.exec(a); if(m){ const k=SKILLS.find(x=>x.toLowerCase()===m[1].toLowerCase()); if(k) return st.stat(k+' Trained')>0; }   // "Acrobatics Skill Training" (Beast Guidance)
   if(st.granted.has(a) || st.names.has(a.toLowerCase())) return true;
@@ -434,7 +451,13 @@ function reqAtom(a,st){
 
 /* ---------- prerequisites (written for people, e.g. "Dwarf, Str 13, trained in Athletics") ----------
    Returns true when met. Anything we can't interpret is allowed rather than blocked. */
-function prereqOk(el, st){
+let PRE_SELF=null;
+// whether a granted entry is the one being checked, or came from it (its grants, or a choice it offers)
+function fromSelf(id,st){ const me=PRE_SELF?.id; if(!me) return false;
+  for(let v=id, n=0; v && n<30; n++){ if(v===me) return true; const via=st.via.get(v); if(!via || via==='start') return false; v=String(via).split('#')[0]; }
+  return false; }
+function prereqOk(el, st){ const was=PRE_SELF; PRE_SELF=el; try{ return prereqOk1(el,st); } finally{ PRE_SELF=was; } }
+function prereqOk1(el, st){
   const p=el.pre; if(!p) return true;
   if(/unselectable|not selectable/i.test(p)) return false;
   // feats of a higher tier need that tier
@@ -463,7 +486,12 @@ function preAll(a,st,strict){
   return preAtom(a,st,strict);
 }
 function preAtom(a,st,strict){
-  if(!a || a[0]==='~') return true;
+  if(!a) return true;
+  // "~DWARF", "~Lunar Strike": the original's "not" (not a dwarf; not already having Lunar Strike); a name we don't know: allowed
+  // ("_" stands for a space or a hyphen: THRI_KREEN, HALF_ELF, LONGTOOTH_SHIFTER: compared without either)
+  // (the entry itself, and what it gives, don't count: Human's "~HUMAN" stops a second race, not Human)
+  if(a[0]==='~'){ const k=s=>s.toLowerCase().replace(/[^a-z0-9]/g,''), key=k(a.slice(1));
+    return ![...st.granted].some(([id,e])=>k(e.name)===key && !fromSelf(id,st)); }
   if(a[0]==='!') return !preAtom(a.slice(1).trim(),st);
   a=a.replace(/^(you )?must (be|have) (an? |the )?/i,'').replace(/^membership in (the )?/i,'').replace(/[.;:]+$/,'').trim();   // "...training in Intimidate." -> no full stop
   const al=[...st.granted.values()].find(e=>e.type==='Alignment');
@@ -552,15 +580,20 @@ function catHas(el,tok){
 }
 const HIDDEN_CLASS=/^ID_WOG_COMPANION|^ID_INTERNAL_CLASS_HYBRID$|^ID_FMP_CLASS_0$|ORDER_ADEPT/;
 
-function classIds(st){ return String(st.texts['_CLASSNAME']||'').split(/[\s()]+/).filter(Boolean); }
+function classIds(st){
+  const ids=String(st.texts['_CLASSNAME']||'').split(/[\s()]+/).filter(Boolean);
+  // the witch names only herself, but uses wizard powers: her parent class counts too (Essentials classes already name both)
+  if(ids.length===1){ const par=String(RULES.db.els[ids[0]]?.spec?.['_ParentClass']||'').trim(); if(par && RULES.db.els[par]) ids.push(par); }
+  return ids;
+}
 function slotCandidates(slot, st){
   // Essentials sub-classes name two classes: "ID_FMP_CLASS_3 (ID_FMP_CLASS_716)" is fighter (slayer); either counts
   const db=RULES.db, cls=classIds(st).join('|')||'__none__';
   // tokens: "$$LEVEL" = a level up to the character's, "$$CLASS" = your class, "$$NOT_CLASS" = any other class, "!X" = must not be X
   const hybrids=[...st.granted.values()].filter(e=>e.type==='Hybrid Class').map(e=>e.id).join('|')||'__none__';
   const toks=slot.cat ? slot.cat.split(',').map(t=>t.trim()).filter(Boolean)
-    .map(t=>t.replace(/\$\$NOT_CLASS/g,'!'+cls).replace(/\$\$CLASS_OR_MULTICLASS/g,cls).replace(/\$\$HYBRID/g,hybrids)
-              .replace(/\$\$LEVEL/g,Array.from({length:st.level},(_,i)=>i+1).join('|')).replace(/\$\$CLASS/g,cls+'|ID_FMP_CLASS_0')) : [];   // ID_FMP_CLASS_0: skill powers, open to every class
+    .map(t=>t.replace(/\$\$NOT_CLASS/gi,'!'+cls).replace(/\$\$CLASS_OR_MULTICLASS/gi,cls).replace(/\$\$HYBRID/gi,hybrids)
+              .replace(/\$\$LEVEL/gi,Array.from({length:st.level},(_,i)=>i+1).join('|')).replace(/\$\$CLASS/gi,cls+'|ID_FMP_CLASS_0')) : [];   // ID_FMP_CLASS_0: skill powers, open to every class
   // things the character already has from somewhere else can't be picked again
   const elsewhere=new Set(); for(const [id,via] of st.via) if(via!==slot.key) elsewhere.add(id);
   const out=[];

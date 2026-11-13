@@ -49,6 +49,7 @@ const Units={
     this.metric=on; try{ localStorage.setItem(this.KEY,on?'metric':'imperial'); }catch(e){}
     this.label();
     if(typeof Builder!=='undefined' && Builder.ch && RULES.db) Builder.render();     // hints in input boxes
+    if(typeof Workshop!=='undefined' && (Workshop.item || Workshop.th?.kind==='Race') && RULES.db) Workshop.render();  // weight and height boxes: imperial or metric
     if(on) this.walk(document.body);
     else { const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); while(w.nextNode()){ const n=w.currentNode, o=this.orig.get(n); if(o!=null){ n.nodeValue=o; this.orig.delete(n); } } }
   },

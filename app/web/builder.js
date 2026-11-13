@@ -1,8 +1,9 @@
 "use strict";
 /* =====================================================================
-   Character builder screen (level 1), arranged like the original builder:
-   Start | Class | Race | Background | Ability Scores | Skills | Powers | Feats
-   Uses rules.js for the logic and compendium.js for showing entries.
+   Character builder screen, arranged like the original builder:
+   Start | Build (class, race, background, ability scores, skills, powers, feats; every level) | Shop | Manage | Character Sheet
+   Uses rules.js for the logic and compendium.js for showing entries. The other parts of the builder are in their own
+   files: shop.js, manage.js, charsheet.js, importer.js (the original builder's .dnd4e files), portraits.js.
    ===================================================================== */
 
 // point buy and the ability arrays come from the core library (applyCore)
@@ -250,10 +251,11 @@ const Builder={
   },
   options(slot){
     const showAll=!!this.ch.showAll[this.stepOf(slot)], picks=this.picksOf(slot);
-    const cls=classIds(this.st), classOnly=slot.type==='Power' && /\$\$CLASS/.test(slot.cat) && cls.length;
+    const cls=classIds(this.st), classOnly=slot.type==='Power' && /\$\$CLASS/i.test(slot.cat) && cls.length;
     return slotCandidates(slot,this.st)
       .filter(e=>!(e.type==='Feat' && e.spec['Container']))          // "Weapon Focus" itself is just a group heading
-      .filter(e=>!classOnly || !e.spec['Class'] || cls.includes(e.spec['Class'].trim()))   // e.g. no vampire powers for a fighter
+      // e.g. no vampire powers for a fighter; a theme's (or race's) power names the theme as its "Class": the character's own theme counts
+      .filter(e=>{ const c=String(e.spec['Class']||'').trim(); return !classOnly || !c || cls.includes(c) || this.st.granted.has(c); })
       .map(e=>{
         const pre=prereqOk(e,this.st), book=this.bookOk(e), house=isHouseRule(e), impl=veImplementOk(slot,e,this.st);
         const ok=pre && book && !slot.extra && !house && impl;
@@ -988,8 +990,33 @@ const Builder={
       if(k[0]==='_' || ['Display','Class','Level','Power Usage','Power Type','Short Description','type','Type','Container'].includes(k) || /^ID_/.test(v)) continue;
       box.append(...specRow(k,v));
     }
-    if(e.text){ for(const para of e.text.split(/\n\s*/)) if(para.trim()) box.append(el('p',{text:para.trim()})); }
+    if(e.text) box.append(...textParas(e.text));
     else if(e.spec['Short Description']) box.append(el('p',{text:e.spec['Short Description']}));
+    // a homebrew racial trait (a subrace too): the powers it gives, and those of the traits it gives
+    if(e.type==='Racial Trait'){ const db=RULES.db, seen=new Set();
+      const walk=(x,n)=>{ for(const [t,a] of x.rules||[]) if(t==='grant'){ const g=db.els[a.name]; if(!g || seen.has(g.id)) continue; seen.add(g.id);
+        if(g.type==='Power'){ const c=el('div',{class:'subcard'}); renderPowerCard(c,g); box.append(c); } else if(g.type==='Racial Trait' && n<2) walk(g,n+1); } };
+      walk(e,0); }
+    // a homebrew race: its racial traits, and the powers they give
+    if(e.type==='Race'){ const db=RULES.db;
+      const g=db.els[(e.rules.find(([t,a])=>t==='grant' && a.type==='Grants')||[])[1]?.name];
+      const ids=[...String(e.spec['Racial Traits']||'').split(',').map(x=>x.trim()), ...(g?.rules||[]).filter(([t,a])=>t==='grant' && a.type==='Racial Trait').map(([,a])=>a.name)];
+      const traits=[...new Set(ids)].map(x=>db.els[x]).filter(t=>t && t.type==='Racial Trait' && !(t.cats||[]).includes('ID_INTERNAL_CATEGORY_SKILL_BONUS'));
+      if(traits.length){ box.append(el('h3',{text:'Racial traits'})); for(const t of traits) box.append(el('p',{}, el('b',{text:t.name+': '}), t.spec['Short Description']||t.text||''));
+        // a choice of subraces: each with what it gives
+        for(const t of traits){ const sel=t.rules.find(([k,a])=>k==='select' && a.type==='Racial Trait'); if(!sel) continue;
+          const subs=(db.byType['Racial Trait']||[]).map(i=>db.els[i]).filter(x=>(x.cats||[]).includes(String(sel[1].category||'').trim()));
+          for(const x of subs) box.append(el('p',{style:'margin-left:16px'}, el('b',{text:x.name+': '}), x.spec['Short Description']||'')); } }
+      for(const t of traits) for(const [k,a] of t.rules) if(k==='grant' && db.els[a.name]?.type==='Power'){ const c=el('div',{class:'subcard'}); renderPowerCard(c,db.els[a.name]); box.append(c); } }
+    // a homebrew theme: its features by level, and the powers it gives and offers
+    if(/^(Theme|Paragon Path|Epic Destiny)$/.test(e.type)){ const db=RULES.db;
+      const feats=e.rules.filter(([t,a])=>t==='grant' && db.els[a.name]?.type==='Class Feature').map(([t,a])=>({f:db.els[a.name], lvl:+(a.level||a.Level)||1})).sort((a,b)=>a.lvl-b.lvl);
+      if(feats.length){ box.append(el('h3',{text:'Features'}));
+        for(const {f,lvl} of feats) box.append(el('p',{}, el('b',{text:'Level '+lvl+': '}), f.spec['Short Description']||f.text||f.name)); }
+      const ids=[]; for(const {f} of feats) for(const [t,a] of f.rules) if(t==='grant' && db.els[a.name]?.type==='Power') ids.push(a.name);
+      for(const [t,a] of e.rules) if(t==='grant' && db.els[a.name]?.type==='Power' && !ids.includes(a.name)) ids.push(a.name);
+      for(const x of String(e.spec['_DisplayPowers']||'').split(',').map(x=>x.trim())) if(db.els[x] && !ids.includes(x)) ids.push(x);
+      for(const id of ids){ const c=el('div',{class:'subcard'}); renderPowerCard(c,db.els[id]); box.append(c); } }
     box.append(el('p',{class:'publishedIn',text:e.hb && !e.hbReplaces ? 'Homebrew, from the pack '+e.hb+'.'
       : (e.source && e.source!=='Core' ? 'Published in '+e.source+'.' : 'Core rules.')+(e.hb ? ' Changed by the homebrew pack '+e.hb+'.' : '')}));
     linkTerms(box,'');
@@ -1160,7 +1187,7 @@ function featGroup(e){
 }
 // Classes and races: Player's Handbook 1-3, then Essentials, then everything else
 function bookGroup(e){
-  if(e.hb || e.hbMod) return 'Homebrew';          // new or changed by a homebrew pack: in a group of its own
+  if(e.hb && !e.hbReplaces) return 'Homebrew';     // new from a homebrew pack: in a group of its own; a changed official one stays in its book (as in CBLoader)
   const src=(e.source||'').split(',').map(x=>x.trim()).filter(x=>x && x!=='Core')[0]||'';
   if(/^Player's Handbook( [23])?$/.test(src)) return src;
   if(/Player Essentials|Heroes of the Fallen Lands|Heroes of the Forgotten Kingdoms|Heroes of Shadow|Red Box/.test(src)) return 'Essentials';
@@ -1197,7 +1224,7 @@ function renderItemCard(box,e,depth){
   const SKIP=/^(_|Level$|Gold$|Silver$|Copper$|Full Text$|Tier$|Magic Item Type$|Item Slot$|count$)/;
   for(const [k,v] of Object.entries(e.spec)){ if(SKIP.test(k) || !v || /^ID_/.test(v)) continue;
     box.append(...specRow(k,v)); }
-  if(e.text) for(const para of e.text.split(/\n\s*/)) if(para.trim()) box.append(el('p',{text:para.trim()}));
+  if(e.text) box.append(...textParas(e.text));
   // set bonuses and the powers they give
   if(set){
     const ben=sp(set,'Benefits').split(',').map(x=>db.els[x.trim()]).filter(Boolean);
@@ -1220,8 +1247,23 @@ function renderItemCard(box,e,depth){
 }
 /* one field of a card ("Effect: ..."): line breaks kept, and the data's "<table>Level  Damage ...</table>"
    shown as a real table (rows on separate lines, cells split by tabs) */
+// an entry's text: paragraphs, with the data's "<table>…</table>" (rows on lines, cells split by tabs) as a real table
+function textParas(text){
+  const out=[];
+  for(const part of String(text).split(/(<table>[\s\S]*?<\/table>)/i)){
+    const t=/^<table>([\s\S]*)<\/table>$/i.exec(part);
+    if(t){ const rows=t[1].replace(/\r/g,'').split(/\n/).map(r=>r.split(/\t+/).map(c=>c.trim())).filter(r=>r.some(Boolean));
+      if(rows.length>1) out.push(el('table',{class:'spectable'}, ...rows.map((r,i)=>el('tr',{}, ...r.map(c=>el(i?'td':'th',{text:c}))))));
+      else if(t[1].trim()) out.push(el('p',{text:t[1].trim()}));
+      continue; }
+    for(const para of part.split(/\n\s*/)) if(para.trim()) out.push(el('p',{text:para.trim()}));
+  }
+  return out;
+}
 function specRow(k,v){
   const out=[]; v=String(v);
+  // a bare weight is in pounds (so Metric can show it in kilograms)
+  if(/^weight$/i.test(k) && /^\s*\d+(\.\d+)?\s*$/.test(v)) v=v.trim()+' lb.';
   const parts=v.split(/(<table>[\s\S]*?<\/table>)/i);
   let first=true;
   for(const part of parts){
@@ -1261,7 +1303,7 @@ function renderPowerCard(box,e){
   if(e.spec['Power Usage']) box.append(el('p',{class:'powerstat'}, el('b',{text:e.spec['Power Usage'].trim()}), e.spec['Keywords'] ? ' ✦ '+e.spec['Keywords'].trim() : ''));
   for(const [k,v] of Object.entries(e.spec)){ if(k[0]==='_' || /^(Display|Class|Short Description|type|Type|Container|Power Usage|Power Type|Level|Keywords)$/.test(k) || !v || /^ID_/.test(v)) continue;
     box.append(...specRow(k,v)); }
-  if(e.text) for(const para of e.text.split(/\n\s*/)) if(para.trim()) box.append(el('p',{text:para.trim()}));
+  if(e.text) box.append(...textParas(e.text));
 }
 // A patron from the additions file (a Dark Sun sorcerer-king, say): who they are, plus anything in the user's own files that belongs to them
 function renderPatron(box,e){

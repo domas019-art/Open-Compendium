@@ -512,7 +512,7 @@ body.sheetmode #bSheet{display:none}
 .vcond.eff{background:#d9ecdf;color:#1d4d2c}
 :root[data-theme=dark] .vcond{background:#4a3a20;color:#f3e2c7}:root[data-theme=dark] .vcond.eff{background:#22402c;color:#d9ecdf}
 .vcond .x{border:0;background:transparent;cursor:pointer;font-size:15px;color:inherit}
-.sheettabs{margin-bottom:10px}
+.sheettabs{margin-bottom:10px;max-width:none;flex-wrap:wrap;justify-content:center}
 .cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;align-items:start}
 .cols2>.bcard{max-width:none;margin:0}
 .prows{display:flex;flex-direction:column}
@@ -813,3 +813,58 @@ button.linkish{border:0;background:none;padding:0;font:inherit;color:inherit;tex
 .wskwlist{max-height:150px;overflow:auto;margin-top:6px;padding:2px 0}
 .wscustom input{flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-weight:600}
 .wscustom textarea{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+/* when a feature's effect applies (from level 11, only with…, in light armor) */
+details.wscond{margin:-2px 0 6px 18px;font-size:.85em}
+details.wscond>summary{cursor:pointer;color:var(--muted);list-style:none}
+details.wscond>summary::before{content:'▸ ';}
+details.wscond[open]>summary::before{content:'▾ ';}
+details.wscond.on>summary{color:var(--accent,inherit);font-weight:600}
+details.wscond .wsgrid{margin:4px 0 0}
+details.wscond label{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+details.wscond input,details.wscond select{padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;min-width:0}
+details.wspmore{margin-top:10px}
+details.wspmore>summary{cursor:pointer;font-weight:600}
+.wseffrow{border-left:3px solid var(--line);padding:4px 0 4px 10px;margin:8px 0}
+.wseffrow .wseff>select:first-child{width:auto;max-width:300px;font-weight:600}
+.wseffbody{margin-top:4px}
+.wseffbody small.muted{flex-basis:100%}
+.wseffrow details.wscond{margin:4px 0 0 0}
+/* powers hidden by the player: the column's header button, and the right-click menu */
+.pcol h3.phead{display:flex;align-items:center;gap:6px}
+.pcol h3.phead>span{flex:1}
+.phidbtn{font-size:12px;padding:2px 8px}
+.pcol.hidview .prows{opacity:.8}
+.ctxmenu{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);padding:4px;min-width:170px}
+.ctxmenu button{display:block;width:100%;text-align:left;background:none;border:0;padding:7px 10px;border-radius:6px;font:inherit;color:var(--ink);cursor:pointer}
+.ctxmenu button:hover{background:var(--hover)}
+/* the picker: the list, and the entry pointed at beside it */
+dialog.wspick{width:min(1200px,96vw)}
+dialog.wspick .pkbody{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);min-height:0;border-bottom:1px solid var(--line)}
+dialog.wspick .pkbody .wsplist{border-bottom:0;border-right:1px solid var(--line)}
+.wspkprev{overflow:auto;padding:10px 14px;margin:0}
+@media (max-width:800px){ dialog.wspick .pkbody{grid-template-columns:1fr} .wspkprev{display:none} }
+
+.wsplain{flex-basis:100%;font-size:12.5px;padding:3px 8px;border-left:3px solid var(--accent,#8a5a2b);background:rgba(138,90,43,.08);border-radius:3px}
+
+/* Prepared Spells tab */
+.spellrow input[type=radio],.spellrow input[type=checkbox]{margin:0 2px 0 6px;width:16px;height:16px;flex:none}
+.spellon{font-size:12px;color:var(--accent,#3a7);padding:0 8px;white-space:nowrap}
+.spellrow.swapped{background:color-mix(in srgb,var(--accent,#3a7) 10%,transparent)}
+.spellstate{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+.spellpick{padding:6px 0 10px 18px;border-bottom:1px solid var(--line)}
+.spellsearch{width:100%;max-width:320px;margin-bottom:6px}
+
+/* pools under the action points; uses left on a power; augmented versions */
+.vpool{display:flex;align-items:center;gap:6px;margin-top:4px;padding-top:4px;border-top:1px solid var(--line)}
+.vpool>span{flex:1}
+.vpool .btn.small{min-width:26px;padding:1px 6px}
+.usesleft{font-size:12px;color:var(--accent);margin-left:6px;white-space:nowrap}
+.usesleft.none{color:var(--muted)}
+.pcard2:has(.paugs){flex-wrap:wrap}
+.paugs{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px 18px;flex-basis:100%}
+.paug{font-size:12px}
+.paug b{margin-right:4px}
+.paug:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
+.vpool .btn.small:disabled{opacity:.4;cursor:not-allowed}
+.usesmore{font-size:12px;margin-left:6px;padding:0 5px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.usesmore:hover{background:var(--hover)}

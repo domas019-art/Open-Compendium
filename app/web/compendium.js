@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 let lib = {};      // raw data per category: {cols, rows, index, data, hay}
 let views = {};    // what the list shows: every category plus "*" (Everything)
 const ALL = '*';
@@ -597,8 +597,36 @@ function showDice(root){
     n.replaceWith(frag);
   }
 }
+// names of homebrew powers, features and feats ("Minion Attack"): they link to the homebrew entry, before any compendium
+// word inside them ("Minion", "Attack") can
+let _hbTerms=null;
+function hbTermIndex(){
+  const db=typeof RULES!=='undefined' && RULES.db; if(!db) return null;
+  if(_hbTerms && _hbTerms.db===db) return _hbTerms;
+  const map=new Map();
+  for(const e of Object.values(db.els)) if(e.hb && /^(Power|Class Feature|Feat|Racial Trait|Race|Class)$/.test(e.type) && String(e.name||'').trim().length>=4) map.set(e.name.trim().toLowerCase(), e.id);
+  const words=[...map.keys()].sort((a,b)=>b.length-a.length).map(escRe);
+  return _hbTerms={db, map, re:words.length ? new RegExp('(?<![\\w-])('+words.join('|')+')(?![\\w-])','gi') : null};
+}
+function linkHomebrew(root){
+  const H=hbTermIndex(); if(!H || !H.re) return;
+  const self=String(root.querySelector('h1')?.firstChild?.nodeValue||'').trim().toLowerCase();
+  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes=[];
+  while(w.nextNode()){ const n=w.currentNode; if(!n.parentElement.closest('h1,.term,.publishedIn,.empty,.notice')) nodes.push(n); }
+  for(const n of nodes){
+    const t=n.nodeValue; H.re.lastIndex=0; let m, last=0, frag=null;
+    while((m=H.re.exec(t))){
+      const low=m[0].toLowerCase(); if(low===self) continue;
+      frag ||= document.createDocumentFragment(); frag.append(t.slice(last,m.index));
+      const sp=document.createElement('span'); sp.className='term'; sp.textContent=m[0]; sp.dataset.rid=H.map.get(low);
+      frag.append(sp); last=m.index+m[0].length;
+    }
+    if(frag){ frag.append(t.slice(last)); n.replaceWith(frag); }
+  }
+}
 function linkTerms(root, selfKey){
   showDice(root);
+  linkHomebrew(root);
   const T=termIndex(); if(!T.re) return;
   // a monster's own version of a disease ("filth fever" in the Dire Rat opens "Dire Rat Filth Fever")
   const h1=root.querySelector('h1.monster'), who=h1 ? String(h1.firstChild && h1.firstChild.nodeValue || '').trim().toLowerCase() : '';
@@ -774,11 +802,15 @@ function ask(text,{ok='OK',cancel='Cancel'}={}){
 function tell(text){ return ask(text,{cancel:null}); }
 
 let popFor=null;
-function closePop(){ $('#pop').hidden=true; popFor=null; }
+// the popup itself (kept here: while a window is open it sits inside it, and comes back to the page when the window closes,
+// so it isn't removed along with the window)
+const POP=document.getElementById('pop');
+function closePop(){ POP.hidden=true; popFor=null; }
 function openPop(el){
-  const r=el.getBoundingClientRect(), p=$('#pop');
+  const r=el.getBoundingClientRect(), p=POP;
   const host=document.querySelector('dialog[open]')||document.body;   // a popup must sit inside an open dialog to be visible
-  if(p.parentElement!==host) host.append(p);
+  if(p.parentElement!==host){ host.append(p);
+    if(host!==document.body) host.addEventListener('close',()=>{ p.hidden=true; popFor=null; document.body.append(p); },{once:true}); }
   if(el.dataset.rid){
     Builder.renderElement(p, el.dataset.rid);
     // a power the character has (chosen or gained automatically): its worked-out numbers under the text

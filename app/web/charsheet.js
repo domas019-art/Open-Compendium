@@ -4,9 +4,12 @@
    A vitals bar that is always on top (hit points, surges, second wind, death saves, action points, rests),
    and tabs below it. Rows are short; details open with a click.
    What happens in play (damage, used powers, conditions...) is kept in ch.play and saved with the character.
+   Limits are read from the entries' own words ("twice per encounter", "one channel divinity power per encounter");
+   counters in the bar (power points, shrouds...) are the core library's "Resource Pool" entries; spells to prepare
+   come from spellbook choices or a spellbook table in the library (Prepared Spells tab, ch.prepared).
    ===================================================================== */
 
-const SHEET_TABS=[['combat','Powers & Combat'],['skills','Skills & Abilities'],['features','Features & Feats'],['gear','Inventory'],['notes','Companions & Notes'],['mounts','Mounts']];
+const SHEET_TABS=[['combat','Powers & Combat'],['spells','Prepared Spells'],['skills','Skills & Abilities'],['features','Features & Feats'],['gear','Inventory'],['notes','Companions & Notes'],['mounts','Mounts']];
 let CONDITIONS=[];
 let DURATIONS=[];
 // what an effect can change, and the numbers it changes
@@ -42,9 +45,10 @@ Object.assign(Builder,{
     if(this.stab==='powers') this.stab='combat';
     this.stab ||= 'combat';
     const hasMounts=this.mounts().length>0; if(this.stab==='mounts' && !hasMounts) this.stab='combat';
-    const tabs=el('nav',{class:'steps sheettabs'}, ...SHEET_TABS.filter(([k])=>k!=='mounts'||hasMounts).map(([k,l])=>el('button',{type:'button',class:'step'+(this.stab===k?' on':''),onclick:()=>{ this.stab=k; this.render(); }},l)));
+    const hasSpells=!!this.spellMode(); if(this.stab==='spells' && !hasSpells) this.stab='combat';
+    const tabs=el('nav',{class:'steps sheettabs'}, ...SHEET_TABS.filter(([k])=>(k!=='mounts'||hasMounts)&&(k!=='spells'||hasSpells)).map(([k,l])=>el('button',{type:'button',class:'step'+(this.stab===k?' on':''),onclick:()=>{ this.stab=k; this.render(); }},l)));
     const vit=this.vitals();      // first: it works out being bloodied, which the powers below depend on
-    const body=({combat:()=>this.combatTab(), skills:()=>this.skillsTab(), features:()=>this.featuresTab(), gear:()=>this.gearTab(), notes:()=>this.notesTab(), mounts:()=>this.mountsTab()}[this.stab]||(()=>[]))();
+    const body=({combat:()=>this.combatTab(), spells:()=>this.spellsTab(), skills:()=>this.skillsTab(), features:()=>this.featuresTab(), gear:()=>this.gearTab(), notes:()=>this.notesTab(), mounts:()=>this.mountsTab()}[this.stab]||(()=>[]))();
     return [el('div',{class:'sheetwrap'}, vit, tabs, ...body.filter(Boolean))];
   },
 
@@ -81,7 +85,7 @@ Object.assign(Builder,{
         manif.length>1 ? el('label',{class:'vmanif',title:'Your current elemental manifestation (changing it takes a short rest, or as your power allows)'}, 'Manifestation ',
           el('select',{onchange:e=>set(()=>{ P.manifest=e.target.value; })}, ...manif.map(m=>el('option',{text:m,selected:m===P.manifest})))) : null,
         el('button',{class:'btn',type:'button',title:'Encounter powers and second wind come back; temporary hit points and short effects end',text:'Short rest',onclick:()=>set(()=>this.shortRest())}),
-        el('button',{class:'btn',type:'button',title:'Everything comes back: hit points, surges, all powers, action points',text:'Extended rest',onclick:async()=>{ if(await ask('Take an extended rest? Hit points, healing surges and all powers are restored.')) set(()=>this.extendedRest()); }})));
+        el('button',{class:'btn',type:'button',title:'Everything comes back: hit points, surges, all powers, action points',text:'Extended rest',onclick:async()=>{ if(await ask('Take an extended rest? Hit points, healing surges and all powers are restored.'+(this.spellMode()?' Afterwards you can prepare your spells again (Prepared Spells tab).':''))) set(()=>this.extendedRest()); }})));
     const hpBox=el('div',{class:'vhp'+(state?' '+state.toLowerCase():'')},
       el('div',{class:'vhptop'}, el('span',{class:'muted small',text:'Hit points'}), state?el('span',{class:'vstate',text:state}):null),
       el('div',{class:'vhpnum'}, el('b',{text:hp}), el('span',{class:'muted',text:' / '+max}), temp?el('span',{class:'vtemp',text:' +'+temp+' temp'}):null),
@@ -107,7 +111,15 @@ Object.assign(Builder,{
       el('div',{}, el('b',{text:ap}), el('span',{class:'muted',text:' · milestones '+(P.milestones||0)})),
       el('div',{class:'brow'},
         el('button',{class:'btn small',type:'button',disabled:ap<=0,text:'Spend',title:'Free action: take an extra action this turn (once per encounter)',onclick:()=>set(()=>{ P.ap=ap-1; const A=this.actions(); A.extra=(A.extra||0)+1; })}),
-        el('button',{class:'btn small',type:'button',text:'+ Milestone',title:'Reaching a milestone (two encounters without an extended rest) gives an action point and another daily item power use',onclick:()=>set(()=>{ P.milestones=(P.milestones||0)+1; P.ap=ap+1; })})));
+        el('button',{class:'btn small',type:'button',text:'+ Milestone',title:'Reaching a milestone (two encounters without an extended rest) gives an action point and another daily item power use',onclick:()=>set(()=>{ P.milestones=(P.milestones||0)+1; P.ap=ap+1; })})),
+      // pools to keep track of (power points, entropy points, soul shards, shrouds): under the action points
+      ...this.pools().map(pool=>{ const v=this.poolVal(pool), pl=(P.pools ||= {});
+        const add=d=>set(()=>{ const n=Math.max(0, pool.max!=null ? Math.min(pool.max, v+d) : v+d); pl[pool.key]=pool.spend ? pool.max-n : n; if(!pl[pool.key]) delete pl[pool.key]; });
+        return el('div',{class:'vpool',dataset:{pool:pool.key},title:pool.tip},
+          el('span',{class:'muted small',text:pool.label}),
+          el('b',{text:pool.spend ? v+' / '+pool.max : pool.max!=null ? v+' / '+pool.max : String(v)}),
+          el('button',{class:'btn small',type:'button',text:'−',disabled:v<=0,title:pool.spend?'Spend one':'Remove one',onclick:()=>add(-1)}),
+          el('button',{class:'btn small',type:'button',text:'+',disabled:pool.max!=null && v>=pool.max,title:pool.spend?'Regain one':'Add one',onclick:()=>add(1)})); }));
     // this turn's actions
     const A=this.actions();
     const act=(k,label,max)=>{ const u=A[k]||0, mx=max+(k==='standard'?(A.extra||0):0);
@@ -166,6 +178,23 @@ Object.assign(Builder,{
       if(m && !P.effects.some(x=>x.note===e.name && x.from==='secondwind')) P.effects.push({id:Date.now()+1,stat:'Attack rolls',value:+m[1],type:m[2][0].toUpperCase()+m[2].slice(1),kw:(m[3]||'').toLowerCase(),note:e.name,dur:m[4].toLowerCase(),from:'secondwind'});
     }
     return true;
+  },
+  /* a power's bonuses to you for a while ("you gain a +2 power bonus to AC and Reflex until the end of your next
+     turn"), from its Effect: put on the numbers when it's used, until "Next turn" (or a rest) ends them */
+  selfEffects(p){
+    const P=this.play(), t=sp(p,'Effect'), re=/\byou gain an? \+(\d+) (?:(\w+) )?bonus to (?:the |your )?([^.;]+?) until the (end of your next turn|start of your next turn|end of the encounter)/gi;
+    P.effects=P.effects.filter(x=>x.from!=='power:'+p.id);
+    for(const m of t.matchAll(re)){
+      const v=+m[1], type=m[2]&&!/^an?$/i.test(m[2])?m[2][0].toUpperCase()+m[2].slice(1):'', what=m[3].toLowerCase(), dur=m[4].toLowerCase(), stats=[];
+      if(/all defenses/.test(what)) stats.push('All defenses');
+      else for(const [w,stat] of [['ac','AC'],['armor class','AC'],['fortitude','Fortitude'],['reflex','Reflex'],['will','Will']]) if(new RegExp('\\b'+w+'\\b').test(what)) stats.push(stat);
+      if(/attack rolls?/.test(what)) stats.push('Attack rolls');
+      if(/damage rolls?/.test(what)) stats.push('Damage rolls');
+      if(/\bspeed\b/.test(what)) stats.push('Speed');
+      if(/saving throws?/.test(what)) stats.push('Saving throws');
+      for(const k of SKILLS) if(new RegExp('\\b'+k+'\\b','i').test(what)) stats.push(k);
+      for(const stat of stats) if(EFFECT_STATS.some(([k])=>k===stat)) P.effects.push({id:Date.now()+P.effects.length, stat, value:v, type, note:p.name, dur, from:'power:'+p.id});
+    }
   },
   // mark the action a power takes ("Standard Action", "Minor Action", "Immediate Interrupt"...)
   useAction(t){
@@ -358,7 +387,8 @@ Object.assign(Builder,{
   },
   shortRest(){
     const P=this.play();
-    for(const id of Object.keys(P.used)){ const e=RULES.db.els[id]; if(!e || !/daily/i.test(sp(e,'Power Usage'))) delete P.used[id]; }
+    for(const id of Object.keys(P.used)){ if(/^day:/.test(id)) continue; const e=RULES.db.els[id]; if(!e || !(/daily/i.test(sp(e,'Power Usage')) || this.asDaily(e))) delete P.used[id]; }
+    this.restPools('short');
     for(const k of Object.keys(P.itemUsed)) if(!/^daily:/.test(k)) delete P.itemUsed[k];
     P.secondWind=false; P.temp=0; P.actions={};
     // the encounter is over: rages and stances end, except a stance that can be assumed at will
@@ -375,6 +405,8 @@ Object.assign(Builder,{
     this.shortRest();
     P.used={}; P.itemUsed={}; P.pets={}; P.hp=this.maxHP(); P.surgesUsed=0; P.deathFails=0; P.milestones=0; P.dailyItemUses=0;
     P.ap=this.st.stat('_BaseActionPoints');
+    P.prepDone=false;     // spells can be prepared again (Prepared Spells tab)
+    this.restPools('extended');
   },
 
   /* ---------- Combat: every power in a column by type, items with attacks, conditions ---------- */
@@ -387,12 +419,20 @@ Object.assign(Builder,{
     const all=this.sheetPowers().filter(p=>!((pets.length || [...st.granted.values()].some(e=>e.type==='Familiar')) && beastPower(p))), util=p=>/utility/i.test(sp(p,'Power Type')+' '+sp(p,'Display'));
     const fams=[...st.granted.values()].filter(e=>e.type==='Familiar');
     const petList=pets.length||fams.length ? [...this.sheetPowers().filter(beastPower), ...pets.flatMap(x=>[x.attack,...(x.acts||[]),...(x.auras||[])]).filter(Boolean)] : [];
-    const cols=[['At-will',p=>/at-will/i.test(sp(p,'Power Usage'))&&!util(p),'u0'],['Encounter',p=>/encounter/i.test(sp(p,'Power Usage'))&&!util(p),'u1'],
-      ['Daily',p=>/daily/i.test(sp(p,'Power Usage'))&&!util(p),'u2'],['Utility',util,'u3']];
+    const cols=[['At-will',p=>/at-will/i.test(sp(p,'Power Usage'))&&!util(p),'u0'],['Encounter',p=>/encounter/i.test(sp(p,'Power Usage'))&&!util(p)&&!this.asDaily(p),'u1'],
+      ['Daily',p=>(/daily/i.test(sp(p,'Power Usage'))||this.asDaily(p))&&!util(p),'u2'],['Utility',util,'u3']];
     const seen=new Set();
-    const columns=cols.map(([t,f,cls])=>{ const list=all.filter(p=>!seen.has(p.id)&&f(p)); list.forEach(p=>seen.add(p.id));
-      if(t==='At-will' && CHARGE) list.splice(list.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
-      return el('div',{class:'pcol '+cls,dataset:{role:{'At-will':'atwill','Encounter':'encounter','Daily':'daily','Utility':'utility'}[t]}}, el('h3',{text:t+' '}, el('small',{class:'muted',text:list.length})), this.powerList(list)); });
+    // powers hidden by the player (right-click a power): each column shows either its shown powers or its hidden ones
+    const hidden=new Set(this.ch.hiddenPowers||[]), view=(this.hiddenView ||= {});
+    const columns=cols.map(([t,f,cls])=>{ const full=all.filter(p=>!seen.has(p.id)&&f(p)); full.forEach(p=>seen.add(p.id));
+      if(t==='At-will' && CHARGE) full.splice(full.filter(p=>sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name)).length,0,CHARGE);
+      const nHid=full.filter(p=>hidden.has(p.id)).length, inHid=!!view[t] && nHid>0;
+      const list=full.filter(p=>hidden.has(p.id)===inHid);
+      return el('div',{class:'pcol '+cls+(inHid?' hidview':''),dataset:{role:{'At-will':'atwill','Encounter':'encounter','Daily':'daily','Utility':'utility'}[t]}},
+        el('h3',{class:'phead'}, el('span',{text:(inHid?t+', hidden ':t+' ')}, el('small',{class:'muted',text:list.length})),
+          nHid ? el('button',{class:'btn small phidbtn',type:'button',title:inHid?'Back to the powers shown':'Show the powers you hid (right-click a power to hide or show it)',
+            text:inHid?'Back':'Hidden ('+nHid+')',onclick:()=>{ view[t]=!inHid; this.render(); }}) : null),
+        this.powerList(list)); });
     if(petList.length) columns.splice(4,0,el('div',{class:'pcol up',dataset:{role:'pets'}}, el('h3',{text:'Companions '}, el('small',{class:'muted',text:[...pets.map(x=>x.name),...fams.map(f=>f.name)].join(' · ')})), this.powerList(petList)));
     const mounts=this.mounts();
     if(mounts.length) columns.splice(petList.length?5:4,0,el('div',{class:'pcol up',dataset:{role:'mounts'}}, el('h3',{text:'Mounts '}, el('small',{class:'muted',text:mounts.map(x=>x.name).join(' · ')})), this.powerList(mounts.flatMap(x=>[...x.powers,...x.traits]))));
@@ -436,7 +476,7 @@ Object.assign(Builder,{
 
   sheetPowers(){
     const order=e=>{ const u=sp(e,'Power Usage').toLowerCase(); return /at-will/.test(u)?0:/encounter/.test(u)?1:/daily/.test(u)?2:3; };
-    return [...this.st.granted.values()].filter(e=>e.type==='Power' && !sp(e,'Animal Companion') && !/^Companion:/.test(e.name))
+    return this.preparedOnly([...this.st.granted.values()].filter(e=>e.type==='Power' && !sp(e,'Animal Companion') && !/^Companion:/.test(e.name)))
       .sort((a,b)=>order(a)-order(b) || (sp(b,'Display')==='Basic Attack')-(sp(a,'Display')==='Basic Attack') || a.name.localeCompare(b.name));
   },
   // powers usable "in place of a melee basic attack" (for a charge, for example)
@@ -455,10 +495,25 @@ Object.assign(Builder,{
   // power cards in a column: name, action and range, the worked-out numbers, and a Use button
   // is the action this power takes still available this turn? (standard, move, minor, immediate)
   actionKey(t){ return /standard/i.test(t)?'standard':/move/i.test(t)?'move':/minor/i.test(t)?'minor':/immediate/i.test(t)?'immediate':''; },
+  // right-click a power: hide it from its column (shown again from the column's "Hidden" list)
+  powerMenu(e,p){
+    if(!p || !p.id) return;
+    e.preventDefault();
+    document.querySelector('.ctxmenu')?.remove();
+    const hid=(this.ch.hiddenPowers||[]).includes(p.id);
+    const close=()=>{ m.remove(); document.removeEventListener('mousedown',outside,true); document.removeEventListener('keydown',esc,true); };
+    const outside=ev=>{ if(!m.contains(ev.target)) close(); }, esc=ev=>{ if(ev.key==='Escape') close(); };
+    const m=el('div',{class:'ctxmenu'}, el('button',{type:'button',text:hid?'Show this power again':'Hide this power',onclick:()=>{
+      const l=new Set(this.ch.hiddenPowers||[]); hid?l.delete(p.id):l.add(p.id); this.ch.hiddenPowers=[...l]; close(); this.changed(); }}));
+    document.body.append(m);
+    m.style.left=Math.min(e.clientX, innerWidth-m.offsetWidth-8)+'px'; m.style.top=Math.min(e.clientY, innerHeight-m.offsetHeight-8)+'px';
+    setTimeout(()=>{ document.addEventListener('mousedown',outside,true); document.addEventListener('keydown',esc,true); },0);
+  },
   powerList(list){
     const P=this.play(), box=el('div',{class:'prows'});
     for(const p of list){
-      const u=sp(p,'Power Usage'), limited=/encounter|daily/i.test(u), used=!!P.used[p.id] || (p.name==='Second Wind' && !!P.secondWind);
+      const u=sp(p,'Power Usage'), uses=this.powerUses(p), left=uses ? this.usesLeft(p,uses) : null, limited=!!uses || /encounter|daily/i.test(u), used=uses ? left===0 : !!P.used[p.id] || (p.name==='Second Wind' && !!P.secondWind);
+      const ppPool=this.pools().find(x=>x.stat==='Power Points'), augs=ppPool ? this.augments(p) : [], ppLeft=ppPool ? this.poolVal(ppPool) : 0;
       const calc=p===CHARGE ? this.chargeCalc() : this.powerCalc(p), first=calc.rows[0], gate=p===CHARGE||p.virtual?null:this.powerGate(p);
       const beastBasic=this.isBeastBasic(p), free=beastBasic && (this.ch.details?.freeBeasts || P.prompt?.free);
       // free-acting companions (house rule): each companion makes one basic attack of its own a turn
@@ -468,13 +523,17 @@ Object.assign(Builder,{
       const akind=this.activeKind(p), isAct=akind && this.isActive(p), utype=/at-will/i.test(u)?'atwill':/encounter/i.test(u)?'encounter':/daily/i.test(u)?'daily':'atwill';
       const ak=this.actionKey(sp(p,'Action Type')), pplan=!used && !free && !p.aura && ak ? this.planActions([ak]) : [];
       const noAct=(pplan.length>0 && !pplan[0].from) || petDone;
-      const row=el('div',{class:'pcard2'+(used?' used':'')+(gate&&!gate.ok?' gated':'')+(gate&&gate.ok?' ready':'')+(noAct?' noact':'')+(beastBasic&&P.prompt&&(!p.pet||this.ch.details?.freeBeasts)?' prompt':'')+(p.aura?' aura':'')+(isAct?' active act-'+utype:''),title:petDone?'This companion has already made its basic attack this turn':noAct?'No '+this.actionKey(sp(p,'Action Type'))+' action left this turn':''},
+      const row=el('div',{oncontextmenu:e=>this.powerMenu(e,p),class:'pcard2'+(used?' used':'')+(gate&&!gate.ok?' gated':'')+(gate&&gate.ok?' ready':'')+(noAct?' noact':'')+(beastBasic&&P.prompt&&(!p.pet||this.ch.details?.freeBeasts)?' prompt':'')+(p.aura?' aura':'')+(isAct?' active act-'+utype:''),title:petDone?'This companion has already made its basic attack this turn':noAct?'No '+this.actionKey(sp(p,'Action Type'))+' action left this turn':''},
         el('button',{class:'pmain',type:'button','aria-expanded':'false'},
           el('div',{class:'ptitle'}, p===CHARGE?el('span',{class:'udot u0'}):p.virtual?el('span',{class:'udot '+(p.aura?'ua':'u0')}):usageDot(p), el('b',{text:p.name}), isAct?el('span',{class:'activetag act-'+utype,text:'Active'}):null),
           owner ? el('div',{class:'powner',text:owner}) : null,
-          el('div',{class:'muted small'}, p.aura ? String(p.text).slice(0,90)+(String(p.text).length>90?'…':'') : [free?'Free (no action)':sp(p,'Action Type'), sp(p,'Attack Type')].filter(Boolean).join(' · '), ' ', p.aura?null:this.usesMark(pplan)),
+          el('div',{class:'muted small'}, p.aura ? String(p.text).slice(0,90)+(String(p.text).length>90?'…':'') : [free?'Free (no action)':sp(p,'Action Type'), sp(p,'Attack Type')].filter(Boolean).join(' · '), ' ', p.aura?null:this.usesMark(pplan),
+            uses ? el('span',{class:'usesleft'+(left===0?' none':''),title:(uses.shared?'Shared by your '+uses.shared+'. ':'')+'Only once per round.',text:left+' of '+uses.max+' left'+(uses.per==='day'?' today':'')}) : null,
+            uses?.more?.length ? el('span',{class:'usesmore',role:'button',tabindex:0,text:'+1 use',title:'Another use this encounter ('+uses.more.join(', ')+')',
+              onclick:ev=>{ ev.stopPropagation(); P.used['+'+uses.key]=(+P.used['+'+uses.key]||0)+1; this.changed(); }}) : null),
           beastBasic&&P.prompt&&(!p.pet||this.ch.details?.freeBeasts) ? el('div',{class:'pgate',text:'Your companion can make this attack now'+(P.prompt.free?' (free action)':'')}) : null,
           summary ? el('div',{class:'patk',text:summary+(calc.rows.length>1?`  +${calc.rows.length-1} more`:'')}) : null,
+          calc.rows.length && !p.pet && !p.virtual && p!==CHARGE && this.poolDamageText() ? el('div',{class:'phint',text:this.poolDamageText()}) : null,
           P.quarry && p.name==="Hunter's Quarry" ? el('div',{class:'phint',text:'Quarry designated: suggested on your attacks until a rest'}) : null,
           P.quarry && calc.rows.some(r=>r.dmg) && !p.pet && !/beast'?s attack bonus/i.test(sp(p,'Attack')) ? el('div',{class:'phint',text:this.quarryText()}) : null,
           ...(calc.rows.some(r=>r.dmg) && !p.pet && !isAct ? this.activeReminders(String(sp(p,'Attack Type')||'')+' '+calc.rows.map(r=>r.range||'').join(' ')).map(t=>el('div',{class:'phint rage',text:t})) : []),
@@ -482,21 +541,33 @@ Object.assign(Builder,{
         p.aura ? el('span',{class:'muted small',text:'always on'}) : el('button',{class:'btn small puse'+(used||petDone?' on':''),type:'button',text:used||petDone?'Used':'Use',
           title:petDone?'Mark as available again':limited?(used?'Mark as available again':'Mark as used (and the action it takes)'):'Mark the action it takes',
           onclick:()=>{ if(petDone){ delete P.petActed[petKey]; }      // marked by mistake: available again
-            else if(used){ delete P.used[p.id]; if(p.name==='Second Wind') P.secondWind=false; }
+            else if(used && uses){ P.used[uses.key]=Math.max(0,(+P.used[uses.key]||0)-1); if(!P.used[uses.key]) delete P.used[uses.key]; P.effects=P.effects.filter(x=>x.from!=='power:'+p.id); }
+            else if(used){ delete P.used[p.id]; if(p.name==='Second Wind') P.secondWind=false; P.effects=P.effects.filter(x=>x.from!=='power:'+p.id); }
             else if(p.name==='Second Wind'){ if(!this.secondWind()) return; P.used[p.id]=1; }      // the same as the button in the bar
-            else {
-              if(limited) P.used[p.id]=1;
+            else doUse();
+            this.changed(); }}));
+      // using the power (or one of its augmented versions: ver, paid for with power points)
+      const doUse=ver=>{
+              if(uses) P.used[uses.key]=(+P.used[uses.key]||0)+1; else if(limited) P.used[p.id]=1;
               if(p.name==="Hunter's Quarry") P.quarry=true;
               if(akind) this.startActive(p);
               if(!free) this.planActions(pplan.map(x=>x.k),true);
+              this.selfEffects(ver||p);
               if(ownTurn) (P.petActed ||= {})[petKey]=1;
               if(beastBasic) delete P.prompt;
               // "your beast companion makes a melee basic attack against the target (as a free action)"
               const t=sp(p,'Effect')+' '+sp(p,'Hit');
               const m=/beast companion (?:can )?makes? a (?:melee )?basic attack[^.]*?(as a free action)?\./i.exec(t);
               if(m) P.prompt={kind:'beast', free:!!m[1], from:p.name};
-            }
-            this.changed(); }}));
+      };
+      const ab=augs.length ? el('div',{class:'paugs'}) : null;
+      if(ab) row.append(ab);
+      if(ab) for(const a of augs){ const c=this.powerCalc(a.el), f=c.rows[0], txt=f ? `${fmt(f.atk)} vs ${f.def}${f.dmg && /d\d|\[W\]/i.test(f.dmg)?' · '+f.dmg:''}` : '';
+        const b=el('button',{class:'btn small paug',type:'button',disabled:used||noAct||ppLeft<a.cost,
+          title:(ppLeft<a.cost?'Not enough power points. ':'')+'Use it augmented: spend '+a.cost+' power point'+(a.cost>1?'s':'')+'.'+['Hit','Effect','Miss'].map(k=>sp(a.el,k)?'\n'+k+': '+sp(a.el,k):'').join(''),
+          onclick:ev=>{ ev.stopPropagation(); (P.pools ||= {})[ppPool.key]=(+P.pools[ppPool.key]||0)+a.cost; doUse(a.el); this.changed(); }},
+          el('b',{text:'Augment '+a.cost}), txt ? ' '+txt : '');
+        ab.append(b); }
       // an active stance or rage: what it does, and a button to end it
       if(isAct){
         const cl=this.activeClauses(p).map(c=>this.workOut(c));
@@ -840,7 +911,7 @@ Object.assign(Builder,{
     const beast=beasts?.[0]||null;
     if(beast) kw=kw.filter(k=>k!=='implement' && k!=='weapon');
     const isWeapon=kw.includes('weapon'), isImpl=kw.includes('implement');
-    const basic=sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name);
+    const basic=sp(p,'Display')==='Basic Attack' || /basic attack/i.test(p.name) || !!sp(p,'_BasicAttack');   // "can be used as a basic attack"
     const half=Math.floor(L/2);
     // damage line for this level
     const hitText=sp(p,'Hit');
@@ -943,10 +1014,22 @@ Object.assign(Builder,{
         for(const n of flatTerms) dmgParts.push([n,'from the power']);
         if(halfLevelDmg) dmgParts.push([half,'one-half your level']);
         dmgParts.push(...stack(dextra));
-        if(wCount && w){ const m=/(\d+)d(\d+)/.exec(sp(w,'Damage')||'1d4'); diceStr=m?`${wCount*+m[1]}d${m[2]}`:''; diceNote=`(${wCount}[W], ${w.name} ${sp(w,'Damage')})`; }
+        // extra dice from features ("+1d8 with a one-handed weapon, once per turn"); a rider can name the weapon, or its
+        // group ("heavy blade:damage"; "blade" for light and heavy blades)
+        const wctx=new Set(w && w!==UNARMED ? [w.name.toLowerCase(), ...sp(w,'Group').toLowerCase().split(/\s*,\s*/).filter(Boolean).flatMap(g=>[g, g+' group', ...(/blade$/.test(g)?['blade','blades']:[])])] : []);
+        const riders=(st.riders||[]).filter(r=>r.quals.every(q=>ctx.has(q) || wctx.has(q) || wctx.has(q.replace(/ weapons?$/,''))));
+        // more [W] with every such attack ("+1W", no "if", "when", "once per turn"...) is added to the weapon dice; the rest is listed
+        const always=r=>!/\b(if|when|whenever|while|once per|combat advantage|charg|bloodied|first|against|instead)\b/i.test(r.cond||'');
+        const wRiders=wCount && w ? riders.filter(r=>/^\+?\s*\d+\s*\[?W\]?$/i.test(r.value) && always(r)) : [];
+        const wMore=wRiders.reduce((n,r)=>n+(+(/\d+/.exec(r.value)[0])),0);
+        if(wCount && w){ const m=/(\d+)d(\d+)/.exec(sp(w,'Damage')||'1d4'), wn=wCount+wMore; diceStr=m?`${wn*+m[1]}d${m[2]}`:''; diceNote=`(${wn}[W]${wMore?', with +'+wMore+'[W] from '+wRiders.map(r=>RULES.db.els[r.src]?.name||'a feature').join(', '):''}; ${w.name} ${sp(w,'Damage')})`; }
         else if(bCount && beast){ const m=/(\d+)d(\d+)/.exec(beast.die||'1d6'); diceStr=m?`${bCount*+m[1]}d${m[2]}`:''; diceNote=`(${bCount}[B], ${beast.name} ${beast.die})`; }
         else if(dice){ diceStr=dice; diceNote='(the power\'s dice)'; }
-        const flat=dmgParts.reduce((t,[v])=>t+v,0);
+        for(const r of riders) if(!wRiders.includes(r)) dmgParts.push([r.value, (r.cond?r.cond+' - ':'')+(RULES.db.els[r.src]?.name||'')]);
+        // Sneak Attack: its dice (d6, d8 with Backstabber) and any extra damage, with the weapons it works with; listed, not added
+        const sa=w && w!==UNARMED ? sneakAttack(st, w, ctx) : null;
+        if(sa){ dmgParts.push([sa.value, 'Sneak Attack (combat advantage, once per turn)']); for(const x of sa.more) dmgParts.push([x.value, 'Sneak Attack'+(x.cond?', '+x.cond:'')+(RULES.db.els[x.src]?' - '+RULES.db.els[x.src].name:'')]); }
+        const flat=dmgParts.reduce((t,[v])=>t+(typeof v==='number'?v:0),0);
         dmg=(diceStr||'')+(flat?(diceStr?(flat>0?'+':''):'')+flat:'');
         if(!dmg) dmg='0';
       }
@@ -958,6 +1041,9 @@ Object.assign(Builder,{
       const ws=this.sheetWeapons().filter(({base})=>{
         const cat=sp(base,'Weapon Category').toLowerCase(), thrown=/thrown/i.test(sp(base,'Properties'));
         return kind==='ranged' ? (/ranged/.test(cat)||thrown) : kind==='melee' ? /melee/.test(cat) : true; });   // 'both', close, area: any weapon
+      // a power an item gives (a weapon's own power): used with that item only
+      const giver=(()=>{ for(let v=st.via?.get(p.id), n=0; v && n<10; n++){ const e=RULES.db.els[String(v).split('#')[0]]; if(!e) return null; if(/^(Weapon|Magic Item)$/.test(e.type)) return e.id; v=st.via.get(e.id); } return null; })();
+      if(giver){ const mine=ws.filter(({base,magic})=>base?.id===giver || magic?.id===giver); if(mine.length) ws.splice(0,ws.length,...mine); }
       const held=s=>{ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[s]); return it ? itemParts(it) : null; };
       const same=(h,base,magic)=>h && h.base?.id===base.id && (h.magic?.id||'')===(magic?.id||'');
       if(byHand){
@@ -970,7 +1056,7 @@ Object.assign(Builder,{
       }
       if(!rows.length){
         for(const {base,magic} of ws) rows.push({...one(base,magic), weapon:magic?itemName({ids:[base.id,magic.id]}):base.name});
-        if((kind==='melee' || kind==='both') && UNARMED) rows.push(one(UNARMED,null));
+        if((kind==='melee' || kind==='both') && UNARMED && !giver) rows.push(one(UNARMED,null));
       }
     } else {
       // implement or no keyword: one line; an implement's enhancement counts for implement powers
@@ -1060,6 +1146,266 @@ Object.assign(Builder,{
         el('p',{}, el('b',{text:'Languages: '}), g.filter(e=>e.type==='Language').map(e=>e.name).join(', ')||'—'),
         el('p',{}, el('b',{text:'Proficiencies: '}), g.filter(e=>e.type==='Proficiency').map(e=>e.name.replace(/^(Weapon|Armor|Implement) Proficiency \((.*)\)$/,'$2')).join(', ')||'—'))
     ];
+  },
+
+  /* ---------- limited uses and resource pools ----------
+     The rules come from the entries' own words, not from lists in the program:
+     powerUses(p): how many times a power can be used when its card says more than once ("twice per encounter",
+     "a number of times per day equal to your Wisdom modifier"), or when it shares its uses with others
+     ("you can use only one channel divinity power per encounter", "you can use two Healing Infusion powers per encounter").
+     null: the usual once. */
+  // everything an entry says (its text and its details), for reading rules out of the words
+  wordsOf(e){ return [e?.text||'', ...Object.entries(e?.spec||{}).filter(([k])=>k[0]!=='_').map(([,v])=>v)].join(' '); },
+  // the character's entries (features, feats, items...) whose words match
+  grantedSaying(re){ return [...this.st.granted.values()].filter(e=>re.test(this.wordsOf(e))); },
+  powerUses(p){
+    if(!p || p===CHARGE || p.virtual || !p.id) return null;
+    const st=this.st, L=st.level, spec=modSpec(p,st), t=String(spec['Special']||'');
+    const N={once:1,twice:2,thrice:3,two:2,three:3,four:4,five:5,'three times':3,'four times':4,'five times':5};
+    // Channel Divinity: one per encounter in all. A power belongs to it by keyword, by its card, or by being listed under a
+    // "Channel Divinity" class feature (some have no keyword). A feature can lift the limit ("use each of your Channel
+    // Divinity powers once per encounter"), allow a second one while bloodied, or (items, feats) give one more this encounter.
+    const cdFeat=[...st.granted.values()].filter(e=>e.type==='Class Feature' && /^Channel Divinity/i.test(e.name));
+    const isCD=/channel divinity/i.test(spec['Keywords']||'') || /only one channel divinity power per encounter/i.test(t) || cdFeat.some(f=>catHas(p,f.id));
+    if(isCD && !this.grantedSaying(/use each of your Channel Divinity powers once per encounter/i).length){
+      if(!cdFeat.length) return {max:1, key:'day:'+p.id, per:'day'};     // without the class feature (a feat gave it): once per day
+      const second=this.play().bloodied && this.grantedSaying(/bloodied[^.]*second Channel Divinity power/i).length>0;
+      const extra=+this.play().used['+grp:cd']||0;
+      const more=[...new Set(this.grantedSaying(/additional use of Channel Divinity/i).map(e=>e.name.replace(/ \+\d$/,'')))];
+      return {max:1+(second?1:0)+extra, key:'grp:cd', per:'encounter', shared:'Channel Divinity powers (one per encounter'+(second?', two while bloodied':'')+')', more};
+    }
+    const ab=/a number of times per day equal to your (\w+) modifier/i.exec(t);
+    if(ab){ const a=ABILITIES.find(x=>x.toLowerCase()===ab[1].toLowerCase()); if(a) return {max:Math.max(1,Math.floor((this.sv(a)-10)/2)), key:'day:'+p.id, per:'day'}; }
+    let best=null;
+    for(const sen of t.split(/(?<=\.)\s+/)){
+      const lv=/\bAt (\d+)(?:st|nd|rd|th) level\b/i.exec(sen); if(lv && L<+lv[1]) continue;
+      // shared: "you can use two Healing Infusion powers per encounter"
+      const g=/\buse (two|three|four|five) ([A-Z][\w' ]*?) powers per (encounter|day)\b/.exec(sen);
+      if(g){ best={max:N[g[1]], per:g[3], key:'grp:'+g[2].toLowerCase(), shared:g[2]+' powers'}; continue; }
+      const m=/\b(once|twice|thrice|three times|four times|five times)\s+(?:per|each|a)\s+(encounter|day)\b/i.exec(sen); if(!m) continue;
+      if(/\bonly (?:once|one) per (?:round|turn)\b/i.test(sen) && !/\b(?:twice|three|four|five)\b/i.test(sen)) continue;
+      if(/\bpowers\b/i.test(sen.slice(0,m.index)) && !/this power/i.test(sen)) continue;     // about several powers, not this one alone
+      const n=N[m[1].toLowerCase()]; if(n>1) best={max:n, per:m[2].toLowerCase()};
+    }
+    if(!best) return null;
+    return {key:(best.per==='day'?'day:':'')+p.id, ...best};
+  },
+  usesLeft(p,u){ u ||= this.powerUses(p); if(!u) return null; return Math.max(0, u.max-(+this.play().used[u.key]||0)); },
+  /* pools kept in the bar under the action points: the "Resource Pool" entries of the core library (power points,
+     entropy points, soul shards, shrouds...). A pool shows when the character has its stat or one of its entries. */
+  pools(){
+    const st=this.st, out=[];
+    for(const r of RESOURCE_POOLS){
+      const max=r.stat ? st.stat(r.stat)||0 : r.max;
+      if(r.stat ? max<=0 : !r.by.some(id=>st.granted.has(id))) continue;
+      out.push({...r, max, spend:!!r.stat});
+    }
+    return out;
+  },
+  // the number shown: what is left of a pool that is spent (power points), or the count of one that builds up
+  poolVal(pool){ const v=(this.play().pools ||= {})[pool.key]; return pool.spend ? Math.max(0,pool.max-(+v||0)) : (+v||0); },
+  // a rest: each pool as its entry says ("Full" or a number; nothing: kept)
+  restPools(kind){
+    const pl=(this.play().pools ||= {});
+    for(const r of this.pools()){ const how=kind==='short' ? r.shortRest : r.extendedRest; if(!how) continue;
+      if(/^full$/i.test(how) || +how===0) delete pl[r.key]; else pl[r.key]=r.spend ? Math.max(0,r.max-(+how)) : +how; }
+  },
+  // a pool that adds damage when invoked (the assassin's shrouds): the suggestion shown on attack cards
+  poolDamageText(){
+    const L=this.st.level;
+    for(const r of this.pools()){ if(!r.damage.length) continue;
+      const n=this.poolVal(r); if(!n) continue;
+      const [dice,flat]=(r.damage.filter(d=>L>=d.level).pop()||r.damage[0]).per;
+      const [cnt,die]=dice.split('d'), part=k=>k>0 ? `${k*(+cnt||1)}d${die}${flat?'+'+k*flat:''}` : 'nothing';
+      return `If you invoke your ${n} ${n>1?r.unitPlural:r.unit}: +${part(n)} damage (${part(n-r.missLess)} on a miss)`;
+    }
+    return '';
+  },
+  // the augmentable versions of a psionic power: [{el, cost}], from its "_AugmentVersions" entries
+  augments(p){
+    if(!p?.id || p.virtual) return [];
+    return String(sp(p,'_AugmentVersions')||'').split(',').map(x=>x.trim()).map(id=>RULES.db.els[id]).filter(Boolean)
+      .map(e=>({el:e, cost:+(/\(Augment (\d+)\)/i.exec(e.name)||[])[1]||0})).filter(x=>x.cost>0).sort((a,b)=>a.cost-b.cost);
+  },
+
+  /* ---------- Prepared Spells ----------
+     wizard: spellbook picks (selects marked "spellbook") hold two spells of each daily and utility level; one of each prepared
+     mage:   a spellbook power with a "Spellbook" table (the mage, the bladesinger): every leveled spell of the class in the
+             book, as many of each kind prepared as the table says for the level, no two of a kind sharing a level
+     witch:  a feature that lets you "replace one of your wizard daily attack powers or wizard utility powers with another"
+     The choices are kept in ch.prepared; spells not prepared are left off the Powers tab. */
+  spellMode(){
+    if(this.spellTable()) return 'mage';
+    // a witch keeps her familiar's swap; a spellbook feat adds wizard-style pairs to it
+    if(this.swapFeature()) return 'witch';
+    if(this.st.slots.some(s=>s.spellbook)) return 'wizard';
+    return null;
+  },
+  spellKind(p){ return /utility/i.test(sp(p,'Power Type')+' '+sp(p,'Display')) ? 'utility' : /encounter/i.test(sp(p,'Power Usage')) ? 'encounter' : /daily/i.test(sp(p,'Power Usage')) ? 'daily' : 'at-will'; },
+  spellLevel(p){ return parseInt(sp(p,'Level'),10)||0; },
+  // a power of the character's class (or parent class: a mage's or witch's spells are wizard powers)
+  ofMyClass(p){ return classIds(this.st).includes(String(sp(p,'Class')).trim()); },
+  // the character's own leveled class spells of these kinds
+  classSpells(kinds){ return [...this.st.granted.values()].filter(e=>e.type==='Power' && this.ofMyClass(e) && this.spellLevel(e)>0 && kinds.includes(this.spellKind(e))); },
+  // the witch's familiar: "replace one of your wizard daily attack powers or wizard utility powers with another wizard power"
+  swapFeature(){ return this.grantedSaying(/replace one of your \w+ daily attack powers or \w+ utility powers with another \w+ power/i)[0]||null; },
+  // the spellbook table of a mage-style class, read from its spellbook power ("Spellbook": Level, Encounter, Daily, Utility):
+  // {name, kinds:[kind...], asDaily, rows:[[from level, to level, counts...]]}
+  spellTable(){
+    const e=[...this.st.granted.values()].find(x=>x.type==='Power' && /\d/.test(sp(x,'Spellbook'))); if(!e) return null;
+    const lines=String(sp(e,'Spellbook')).replace(/<\/?table>/gi,'\n').split(/\n/).map(x=>x.trim()).filter(Boolean);
+    const head=lines.find(x=>/^level\b/i.test(x))||'', asDaily=/encounter as daily/i.test(head);
+    const kinds=(head.replace(/encounter as daily/i,'encounter').match(/encounter|daily|utility/gi)||[]).map(x=>x.toLowerCase());
+    const rows=lines.filter(x=>/^\d/.test(x)).map(x=>{ const w=x.split(/\s+/), [a,b]=w[0].split('-').map(Number); return [a, b||a, ...w.slice(1).map(v=>+v||0)]; });
+    return kinds.length && rows.length ? {name:e.name, kinds, asDaily, rows} : null;
+  },
+  wizardBook(){
+    const st=this.st, groups={};
+    for(const s of st.slots){
+      if(s.type!=='Power' || s.swap) continue;
+      const cat=String(s.cat||'').replace(/ID_INTERNAL_CATEGORY_/g,''), u=/\b(daily|utility)\b/i.exec(cat), l=/(\d+)\s*$/.exec(cat);
+      if(!u || !l) continue;
+      const usage=u[1].toLowerCase(), key=usage+' '+(+l[1]);
+      const g=(groups[key] ||= {key, usage, level:+l[1], slots:[], sb:false}); g.slots.push(s); if(s.spellbook) g.sb=true;
+    }
+    return Object.values(groups).filter(g=>g.sb).map(g=>{
+      const picksOf=s=>(this.ch.picks[s.key]||[]).slice(0,s.number).filter(id=>st.granted.has(id));
+      const members=[...new Set(g.slots.flatMap(picksOf))];
+      const n=Math.max(1, g.slots.filter(s=>!s.spellbook).reduce((a,s)=>a+s.number,0));
+      let sel=this.ch.prepared?.wizard?.[g.key];
+      if(!Array.isArray(sel) || sel.length!==Math.min(n,members.length) || !sel.every(id=>members.includes(id))){
+        sel=[...new Set(g.slots.filter(s=>!s.spellbook).flatMap(picksOf))];
+        for(const id of members) if(sel.length<n && !sel.includes(id)) sel.push(id);
+        sel=sel.slice(0,n);
+      }
+      return {...g, members, n, sel};
+    }).sort((a,b)=>(a.usage>b.usage?1:a.usage<b.usage?-1:0) || a.level-b.level);
+  },
+  // a mage-style spellbook: [{kind, lim, dup, members, sel, dupLeft}] for the character's level. A feature that lets you
+  // "prepare one additional ... power from your spellbook ... the same level" (the bladesinger's Boon Spell) adds one
+  // more of the first kind, which may share a level.
+  mageBook(){
+    const T=this.spellTable(); if(!T) return [];
+    const L=this.st.level, row=T.rows.find(r=>L>=r[0] && L<=r[1]) || T.rows[T.rows.length-1];
+    const boon=this.grantedSaying(/prepare one additional \w+ \w+ power from your spellbook/i).some(e=>/same level/i.test(this.wordsOf(e)));
+    const kinds=T.kinds.map((k,i)=>({kind:k, lim:(row[2+i]||0)+(boon&&i===0?1:0), dup:boon&&i===0?1:0,
+      members:this.classSpells([k]).sort((a,b)=>this.spellLevel(a)-this.spellLevel(b)||a.name.localeCompare(b.name))}));
+    const stored=this.ch.prepared?.mage;
+    for(const k of kinds){
+      const ok=id=>k.members.some(p=>p.id===id), sel=[], seen={}; let dup=k.dup;
+      const take=id=>{ const l=this.spellLevel(RULES.db.els[id]); if(sel.length>=k.lim) return;
+        if(seen[l]){ if(dup<=0) return; dup--; } seen[l]=(seen[l]||0)+1; sel.push(id); };
+      if(Array.isArray(stored)) stored.filter(ok).forEach(take);
+      else [...k.members].reverse().forEach(p=>take(p.id));
+      k.sel=sel; k.dupLeft=dup;
+    }
+    return kinds;
+  },
+  // encounter spells that work as daily powers (the bladesinger's table: "Encounter as Daily")
+  asDaily(p){ return !!this.spellTable()?.asDaily && this.ofMyClass(p) && this.spellLevel(p)>0 && this.spellKind(p)==='encounter'; },
+  witchSwap(){
+    const s=this.ch.prepared?.swap, db=RULES.db;
+    if(!s || !this.st.granted.has(s.out) || this.st.granted.has(s.in) || !db.els[s.in]) return null;
+    const a=db.els[s.out], b=db.els[s.in];
+    return this.spellKind(a)===this.spellKind(b) && this.spellLevel(a)===this.spellLevel(b) ? s : null;
+  },
+  witchChoices(p){
+    const k=this.spellKind(p), l=this.spellLevel(p), st=this.st;
+    return Object.values(RULES.db.els).filter(e=>e.type==='Power' && this.ofMyClass(e) && this.spellLevel(e)===l && this.spellKind(e)===k
+      && !st.granted.has(e.id) && this.bookOk(e) && !isHouseRule(e) && prereqOk(e,st)).sort((a,b)=>a.name.localeCompare(b.name));
+  },
+  // the powers on the sheet, without the spells that aren't prepared today
+  preparedOnly(list){
+    const mode=this.spellMode(); if(!mode) return list;
+    const off=new Set();
+    if(mode==='wizard' || mode==='witch') for(const g of this.wizardBook()) for(const id of g.members) if(!g.sel.includes(id)) off.add(id);
+    if(mode==='mage') for(const k of this.mageBook()) for(const p of k.members) if(!k.sel.includes(p.id)) off.add(p.id);
+    const out=list.filter(p=>!off.has(p.id));
+    // the witch's swap: the new spell takes the old one's place (in a pair too: prepared only if the old one was)
+    const sw=mode==='witch' && this.witchSwap();
+    return sw && out.some(p=>p.id===sw.out) ? [...out.filter(p=>p.id!==sw.out), RULES.db.els[sw.in]] : out.filter(p=>!sw || p.id!==sw.out);
+  },
+  spellsTab(){
+    const mode=this.spellMode(), P=this.play(), locked=!!P.prepDone;
+    const save=fn=>{ fn(this.ch.prepared ||= {}); this.changed(); };
+    const detail=(p,extra)=>{
+      const d=el('div',{class:'pdetail',hidden:true});
+      const b=el('button',{class:'pmain',type:'button'}, el('b',{text:p.name}), el('span',{class:'muted small',text:'Level '+this.spellLevel(p)+' · '+sp(p,'Power Usage')+(sp(p,'Action Type')?' · '+sp(p,'Action Type'):'')}));
+      b.onclick=()=>{ d.hidden=!d.hidden; if(!d.hidden && !d.firstChild){ const c=el('div',{class:'pcard entry'}); this.renderElement(c,p.id); d.append(c); } };
+      return [b,d];
+    };
+    const row=(p,ctl,...after)=>{ const [b,d]=detail(p); return [el('div',{class:'prow2 spellrow'}, ctl, b, ...after.filter(Boolean)), d]; };
+    const info={wizard:['Spellbook','Your spellbook holds two spells of each daily and utility level. After each extended rest, choose which one of each level you prepare. Only prepared spells can be used that day.'],
+      mage:[this.spellTable()?.name||'Spellbook','After each extended rest, prepare spells from your spellbook. Your level sets how many of each kind, and no two spells of the same kind may share a level.'
+        +(this.spellTable()?.asDaily?' Your encounter attack spells can each be used once per day.':'')],
+      witch:["Witch's familiar",'After each extended rest, you can swap one of your wizard daily or utility spells for another wizard spell of the same kind and level.'
+        +(this.st.slots.some(s=>s.spellbook)?' Your spellbook feat also gives you two spells of some levels: prepare one of each.':'')]}[mode];
+    const head=el('div',{class:'bcard wide'}, el('h3',{text:info[0]}), el('p',{class:'muted',text:info[1]}),
+      el('div',{class:'spellstate'},
+        el('span',{text:locked?'Prepared for today. You can change them after your next extended rest.':'You can prepare your spells now. When you are done, press Done preparing.'}),
+        locked ? el('button',{class:'btn small',type:'button',text:'Change anyway',title:'Change your spells before the next extended rest (if your DM allows)',onclick:()=>{ P.prepDone=false; this.changed(); }})
+               : el('button',{class:'btn small primary',type:'button',text:'Done preparing',title:'Keep these spells until your next extended rest',onclick:()=>{ P.prepDone=true; this.changed(); }})));
+    const out=[head];
+    const swap=mode==='witch' ? this.witchSwap() : null;
+    // the witch's Swap… button and its list of wizard spells of the same kind and level, for one of her spells
+    const swapCtl=p=>{
+      const isOut=swap?.out===p.id, pick=el('div',{class:'spellpick',hidden:true});
+      const fill=()=>{
+        const list=this.witchChoices(p), q=el('input',{type:'search',placeholder:'Search '+list.length+' spells…',class:'spellsearch'}), rows=el('div',{class:'prows'});
+        const draw=()=>{ rows.replaceChildren(); const t=q.value.trim().toLowerCase();
+          for(const c of list.filter(c=>!t || c.name.toLowerCase().includes(t))){ const [b,d]=detail(c);
+            rows.append(el('div',{class:'prow2'}, b, el('button',{class:'btn small primary',type:'button',text:'Choose',onclick:()=>save(o=>{ o.swap={out:p.id,in:c.id}; })})), d); }
+          if(!rows.firstChild) rows.append(el('p',{class:'muted small',text:'No other wizard spells of this kind and level.'})); };
+        q.oninput=draw; draw(); pick.append(q, rows);
+      };
+      const btn=isOut ? el('button',{class:'btn small',type:'button',text:'Undo swap',disabled:locked,onclick:()=>save(o=>{ delete o.swap; })})
+        : el('button',{class:'btn small',type:'button',text:'Swap…',disabled:locked,title:swap?'Your other swap is undone: only one spell can be swapped':'Choose another wizard spell of the same kind and level',
+            onclick:()=>{ pick.hidden=!pick.hidden; if(!pick.hidden && !pick.firstChild) fill(); }});
+      return {isOut, shown:isOut ? RULES.db.els[swap.in] : p, extra:[isOut ? el('span',{class:'muted small',text:'in place of '+p.name}) : null, btn], pick};
+    };
+    const inBook=new Set();
+    if(mode==='wizard' || mode==='witch'){
+      const book=this.wizardBook(); book.forEach(g=>g.members.forEach(id=>inBook.add(id)));
+      if(!book.length && mode==='wizard') out.push(el('div',{class:'bcard wide'}, el('p',{class:'muted',text:'Your spellbook has no daily or utility spells yet.'})));
+      for(const g of book){
+        const box=el('div',{class:'prows'});
+        for(const id of g.members){ const p=RULES.db.els[id], on=g.sel.includes(id), sw=mode==='witch' ? swapCtl(p) : null;
+          const inp=el('input',{type:g.n===1?'radio':'checkbox',name:'sb-'+g.key,checked:on,disabled:locked,'aria-label':'Prepare '+p.name});
+          inp.onchange=()=>save(o=>{ o.wizard ||= {}; let s=[...g.sel];
+            if(g.n===1) s=[id]; else if(inp.checked){ s.push(id); if(s.length>g.n) s.shift(); } else s=s.filter(x=>x!==id);
+            if(s.length<Math.min(g.n,g.members.length)) for(const m of g.members) if(s.length<g.n && !s.includes(m) && m!==id) s.push(m);
+            o.wizard[g.key]=s; });
+          if(sw){ const [b,d]=detail(sw.shown); box.append(el('div',{class:'prow2 spellrow'+(sw.isOut?' swapped':'')}, inp, b, on ? el('span',{class:'spellon',text:'Prepared'}) : null, ...sw.extra.filter(Boolean)), d, sw.pick); }
+          else box.append(...row(p, inp, on ? el('span',{class:'spellon',text:'Prepared'}) : null)); }
+        const title=(g.usage==='daily'?'Daily':'Utility')+' spells, level '+g.level;
+        out.push(el('div',{class:'bcard wide'}, el('h3',{}, title+' ', el('small',{class:'muted',text:'prepare '+g.n+' of '+g.members.length})),
+          g.members.length<=g.n ? el('p',{class:'muted small',text:'Only one spell of this level is in your book. Pick the second one in the builder (Powers) to have a choice here.'}) : null, box));
+      }
+    }
+    if(mode==='mage'){
+      const kinds=this.mageBook(), T=this.spellTable(), all=kinds.flatMap(k=>k.sel);
+      for(const k of kinds){
+        if(!k.members.length && !k.lim) continue;
+        const box=el('div',{class:'prows'}), lv=new Set(k.sel.map(id=>this.spellLevel(RULES.db.els[id]))), boonTxt=k.dup ? (k.dupLeft>0?' (one may share a level)':' (one shares a level)') : '';
+        for(const p of k.members){ const on=k.sel.includes(p.id), sameLv=!on && lv.has(this.spellLevel(p)) && !(k.dupLeft>0), full=!on && k.sel.length>=k.lim;
+          const inp=el('input',{type:'checkbox',checked:on,disabled:locked||sameLv||full,'aria-label':'Prepare '+p.name,
+            title:sameLv?'You already prepared '+(k.kind==='daily'?'a':'an')+' '+k.kind+' spell of level '+this.spellLevel(p):full?'You prepared as many '+k.kind+' spells as you can':''});
+          inp.onchange=()=>save(o=>{ o.mage=inp.checked ? [...all,p.id] : all.filter(x=>x!==p.id); });
+          box.append(...row(p, inp, on ? el('span',{class:'spellon',text:'Prepared'}) : null)); }
+        const title={encounter:T.asDaily?'Attack spells (once per day each)':'Encounter attack spells',daily:'Daily attack spells',utility:'Utility spells'}[k.kind];
+        out.push(el('div',{class:'bcard wide'}, el('h3',{}, title+' ', el('small',{class:'muted',text:k.sel.length+' of '+k.lim+' prepared'+boonTxt})),
+          !k.members.length ? el('p',{class:'muted small',text:'None in your spellbook yet.'}) : null, box));
+      }
+    }
+    if(mode==='witch'){
+      const mine=this.classSpells(['daily','utility']).filter(p=>!inBook.has(p.id)).sort((a,b)=>this.spellKind(a).localeCompare(this.spellKind(b))||this.spellLevel(a)-this.spellLevel(b)||a.name.localeCompare(b.name));
+      const box=el('div',{class:'prows'});
+      for(const p of mine){ const sw=swapCtl(p), [b,d]=detail(sw.shown);
+        box.append(el('div',{class:'prow2 spellrow'+(sw.isOut?' swapped':'')}, b, ...sw.extra.filter(Boolean)), d, sw.pick); }
+      if(!mine.length && !inBook.size) box.append(el('p',{class:'muted',text:'You have no wizard daily or utility spells yet.'}));
+      if(mine.length || !inBook.size) out.push(el('div',{class:'bcard wide'}, el('h3',{}, (inBook.size?'Other daily and utility spells ':'Daily and utility spells '), el('small',{class:'muted',text:swap && !inBook.has(swap.out)?'1 swapped':'none swapped'})), box));
+    }
+    return out;
   },
 
   /* ---------- Inventory ---------- */
@@ -1182,3 +1528,18 @@ function layoutPowerCols(wrap){
 let _plTimer=null;
 addEventListener('resize',()=>{ clearTimeout(_plTimer); _plTimer=setTimeout(()=>document.querySelectorAll('.planed').forEach(layoutPowerCols),150); });
 
+
+// Sneak Attack for one weapon: null if the character has none, or it doesn't work with this weapon
+function sneakAttack(st, w, ctx){
+  const n=st.stat('Sneak Attack Dice'); if(!(n>0)) return null;
+  const groups=sp(w,'Group').toLowerCase().split(/\s*,\s*/), name=w.name.toLowerCase();
+  let ok=groups.includes('light blade') || /^(hand crossbow|shortbow|sling)$/.test(name);
+  for(const t of st.textList?.['Sneak Attack Weapons']||[]){ if(ok) break;
+    const m=/^(.*?)\s*(?:\((heroic|paragon|epic) tier\))?$/i.exec(t.value), v=m[1].toLowerCase(), tier=(m[2]||'').toLowerCase();
+    if(tier==='heroic' && st.level>10 || tier==='paragon' && st.level<11 || tier==='epic' && st.level<21) continue;
+    if(/ group$/.test(v) ? groups.includes(v.replace(/ group$/,'')) : (v===name || ctx.has(v))) ok=true; }
+  if(!ok) return null;
+  const die=(String(st.texts['Sneak Attack Die']||'').trim()||'d6').replace(/^1?d/,'d'), flat=st.stat('Sneak Attack')||0;
+  const more=(st.textList?.['Sneak Attack']||[]).filter(x=>/d\d/.test(x.value));
+  return {value:'+'+n+die+(flat?(flat>0?'+':'')+flat:''), more};
+}

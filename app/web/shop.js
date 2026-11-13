@@ -545,7 +545,7 @@ Object.assign(Builder,{
     const detail=el('div',{class:'shopdetail',dataset:{keep:'rdetail:'+(S.rsel||'')}});
     const sel=S.rsel && RULES.db.els[S.rsel];
     if(sel && ritualKind(sel)===kind){
-      // a known alchemical formula: make its items (components cost the item's market price; 30 minutes each)
+      // a known alchemical formula: make its items (free; the components' value, the item's market price, is shown; 30 minutes each)
       if(kind==='alchemy' && known.includes(sel.id)){
         const vars=String(sp(sel,'_RELATED_ITEMS')).split(',').map(x=>RULES.db.els[x.trim()]).filter(Boolean)
           .sort((a,b)=>(+sp(a,'Level')||0)-(+sp(b,'Level')||0));
@@ -555,9 +555,9 @@ Object.assign(Builder,{
           ...vars.map(v=>{ const lv=+sp(v,'Level')||0, price=itemCost(v), hi=lv>L;
             return el('div',{class:'brow makerow'},
               el('span',{class:'grow',text:v.name}), el('span',{class:'muted small',text:fmtMoney(price)}),
-              el('button',{class:'btn small',type:'button',disabled:!can||hi||price>(ch.money||0),
-                title:hi?'Higher level than the character':price>(ch.money||0)?'Not enough money for the components':'Pay for the components ('+fmtMoney(price)+') and add the item',
-                text:'Make',onclick:()=>{ this.shopMsg=this.giveItem([v.id],1,true).replace(/^Bought/,'Made'); this.changed(); }})); })));
+              el('button',{class:'btn small',type:'button',disabled:!can||hi,
+                title:hi?'Higher level than the character':'Make it and add it (components are worth '+fmtMoney(price)+'; nothing is paid)',
+                text:'Make',onclick:()=>{ this.shopMsg=this.giveItem([v.id],1,false).replace(/^Added/,'Made'); this.changed(); }})); })));
       }
       const box=el('div',{class:'entry shopentry'}); this.renderElement(box,sel.id); detail.append(box); }
     else detail.append(el('p',{class:'muted pad',text:`Pick a ${label} to read it here.`}));
