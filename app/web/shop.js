@@ -52,15 +52,21 @@ function syncCoins(ch){
 // rod, wand, orb... for proficiency checks
 function implKind(e){
   const t=sp(e,'Magic Item Type'); if(IMPLEMENT_TYPES.test(t)) return t==='Ki Focus' ? 'ki focuses' : t.toLowerCase();
+  if(e.type==='Superior Implement'){ const g=implGroup(e).toLowerCase(); if(g) return g==='ki focus' ? 'ki focuses' : g; }
   if(e.type==='Gear'||e.type==='Superior Implement'){ const m=/^(orb|rod|staff|wand|tome|totem|holy symbol|ki focus)/i.exec(e.name) || /(orb|rod|staff|wand|tome|totem|symbol)\b/i.exec(e.name);
     if(m){ const k=m[1].toLowerCase(); return k==='symbol'?'holy symbol':k==='ki focus'?'ki focuses':k; } }
   return '';
 }
 const IMPL_GROUPS=['Holy Symbol','Orb','Rod','Staff','Tome','Totem','Wand','Ki Focus'];
 // a superior implement's kind, from its name ("Accurate orb" -> Orb)
-function implGroup(b){ const n=b.name.toLowerCase();
+// (its "Group" when that is an implement; one that is also a weapon, a dagger or a scythe, is that weapon)
+const implWeapon=b=>{ const w=RULES.db.els[sp(b,'WeaponEquiv')]; return w?.type==='Weapon' && !IMPL_GROUPS.includes(sp(b,'Group')) ? w : null; };
+function implGroup(b){ const n=b.name.toLowerCase(), g=sp(b,'Group');
+  if(IMPL_GROUPS.includes(g)) return g; const w=implWeapon(b); if(w) return w.name.replace(/^./,c=>c.toUpperCase());
   return /ki focus/.test(n)?'Ki Focus' : /symbol/.test(n)?'Holy Symbol' : /dagger/.test(n)?'Dagger' : (IMPL_GROUPS.find(g=>n.endsWith(g.toLowerCase()))||''); }
-function implFits(m,b){ const g=implGroup(b), t=sp(m,'Magic Item Type');
+// a magic implement on a superior implement: an implement of its kind; on one that is a weapon, a magic weapon that fits it
+function implFits(m,b){ const g=implGroup(b), t=sp(m,'Magic Item Type'), w=implWeapon(b);
+  if(w) return t==='Weapon' && baseFits(m,w);
   if(g==='Dagger') return t==='Weapon' && baseFits(m,{type:'Weapon',name:'Dagger',spec:{Group:'Light Blade','Weapon Category':'Simple Melee'}});
   return t===g; }
 function shopCat(e){
@@ -224,7 +230,8 @@ Object.assign(Builder,{
     // rows and columns for this category
     let rows;
     if(set) rows=sp(set,'Set Items').split(',').map(x=>RULES.db.els[x.trim()]).filter(Boolean).map(e=>({e, cost:itemCost(e), level:+sp(e,'Level')||0, weight:0}));
-    else rows=(idx.byCat[S.cat]||[]).filter(visible);
+    // a superior implement that is a weapon (an accurate dagger, a corrupted scythe) takes magic weapons
+    else rows=(idx.byCat[magic==='Superior Implement' && base && (implWeapon(base) || implGroup(base)==='Dagger') ? 'Magic Weapons' : S.cat]||[]).filter(visible);
     if(magic && base) rows=rows.filter(r=>magic==='Superior Implement' ? implFits(r.e,base) : baseFits(r.e,base));
     const view=set ? 'sets' : magic ? 'magic' : S.cat==='Armor'||S.cat==='Barding' ? 'armor' : S.cat==='Weapons' ? 'weapon'
       : S.cat==='Mounts' ? 'mounts' : /^(Adventuring Gear|Ammunition|Superior Implements|Scrolls)$/.test(S.cat) ? 'gear' : 'magic';

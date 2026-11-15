@@ -545,6 +545,10 @@ function preAtom(a,st,strict){
     const words=t.replace(/armor/g,'').replace(/shields?/g,'shield').split(/\s+/).filter(Boolean);
     return [...st.granted.values()].some(e=>e.type==='Proficiency' && words.every(w=>e.name.toLowerCase().includes(w)));
   }
+  // "can use the Rod implement" (Superior Implement Training): proficiency with that implement, or a weapon used as one
+  m=/^can use (?:the |a |an )?(.+?) implement$/i.exec(a);
+  if(m){ const x=m[1].trim().toLowerCase(), ig=implementGroups(st);
+    return [x, x+'s', x+'es', x==='ki focus'?'ki focuses':x].some(y=>ig.has(y) || st.names.has('implement proficiency ('+y+')')); }
   const sk=SKILLS.find(x=>x.toLowerCase()===a.toLowerCase());
   if(sk) return st.stat(sk+' Trained')>0;            // a bare skill name means "trained in"
   const n=a.replace(/^(any|an?)\s+/i,'')
@@ -632,6 +636,7 @@ function itemSlots(it){
   // a hexblade's pact weapon is manifested in the main hand, with the implement in the other
   if(base && base.type==='Weapon' && (magic?.rules||[]).some(([t,a])=>t==='grant' && a.name==='WearingPactBlade')) return ['main'];
   if(base && base.type==='Weapon') return /two/i.test(sp(base,'Hands Required')+sp(base,'Item Slot')) ? ['main'] : ['main','off'];
+  if(implTwoHanded(base)) return ['main'];
   const slot=sp(e,'Item Slot').toLowerCase(), mt=sp(magic,'Magic Item Type');
   if(/ki focus/.test(slot) || /^(Holy Symbol|Ki Focus)$/.test(mt) || /holy symbol|ki focus/i.test(e.name) && e.type!=='Magic Item') return ['symbol1','symbol2'];
   if(/primordial shard/.test(slot)) return ['symbol1','symbol2'];
@@ -641,7 +646,10 @@ function itemSlots(it){
   if(/^waist/.test(slot)) return ['waist']; if(/^ring/.test(slot)) return ['ring1','ring2']; if(/^tattoo/.test(slot)) return ['tattoo'];
   return [];
 }
-const twoHanded=it=>{ const {base}=itemParts(it); return !!base && base.type==='Weapon' && /two/i.test(sp(base,'Hands Required')+sp(base,'Item Slot')); };
+const twoHanded=it=>{ const {base}=itemParts(it); return !!base && (base.type==='Weapon' && /two/i.test(sp(base,'Hands Required')+sp(base,'Item Slot')) || implTwoHanded(base)); };
+// a superior implement that is a two-handed weapon (a scythe) takes both hands; a staff is held as an implement
+function implTwoHanded(b){ if(b?.type!=='Superior Implement' || /^staff$/i.test(sp(b,'Group'))) return false;
+  const w=RULES.db.els[sp(b,'WeaponEquiv')]; return w?.type==='Weapon' && /two/i.test(sp(w,'Hands Required')); }
 // a magic weapon or armor needs a base item; which ones fit?
 function baseKind(m){
   if(!m || m.type!=='Magic Item') return '';

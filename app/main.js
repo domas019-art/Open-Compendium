@@ -109,7 +109,9 @@ async function readFolder(dir, folder, out) {
       const text = await fsp.readFile(file, 'utf8');
       const c = JSON.parse(text);
       if (!c || typeof c !== 'object' || !c.id || !c.abilities) continue;
-      if (out[c.id]) continue;       // the same character twice (a copy saved to a file): keep the first
+      // the same id twice (a character file copied in the folder): the copy is a character of its own, with a new id
+      // (saved with it the next time characters are saved), so both show
+      if (out[c.id]) { let n = 0; const base = 'c' + Date.now().toString(36); do c.id = base + (n++ ? '_' + n : ''); while (out[c.id]); }
       c.folder = folder;             // where the file is decides the folder
       out[c.id] = c; charFiles.set(c.id, { file, text });
     } catch (e) { console.warn('could not read', n, e.message); }

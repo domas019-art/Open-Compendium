@@ -687,7 +687,10 @@ Object.assign(Builder,{
   /* ---------- working out attacks ---------- */
   sheetWeapons(){
     const ch=this.ch, eq=ch.equip||{}, out=[], seen=new Set();
-    const add=(base,magic)=>{ if(!base || base.type!=='Weapon') return; const k=base.id+'|'+(magic?.id||''); if(seen.has(k)) return; seen.add(k); out.push({base,magic}); };
+    // a superior implement that is also a weapon (an accurate dagger) attacks as that weapon (its "WeaponEquiv")
+    const add=(base,magic)=>{ let si=null;
+      if(base?.type==='Superior Implement'){ const w=RULES.db.els[sp(base,'WeaponEquiv')]; if(w?.type!=='Weapon' || /^staff$/i.test(sp(base,'Group'))) return; si=base; base=w; }
+      if(!base || base.type!=='Weapon') return; const k=(si||base).id+'|'+(magic?.id||''); if(seen.has(k)) return; seen.add(k); out.push({base,magic,si}); };
     for(const s of ['main','off']){ const it=(ch.items||[]).find(x=>x.uid===eq[s]); if(it){ const {base,magic}=itemParts(it); add(base,magic); } }
     for(const it of ch.items||[]){ if(it.qty<=0) continue; const {base,magic}=itemParts(it); add(base,magic); }
     return out;
@@ -700,7 +703,7 @@ Object.assign(Builder,{
     for(const m of text.matchAll(/Level (\d+):\s*(\d+)\[W\]/g)) if(L>=+m[1]) w=+m[2];
     if(w){
       const main=this.sheetWeapons()[0];
-      if(main){ const d=/(\d+)d(\d+)/.exec(sp(main.base,'Damage')||''); if(d) out.push(`${w}[W] = ${w*+d[1]}d${d[2]}${/extra/i.test(text)?' extra':''} (${main.base.name})`); }
+      if(main){ const d=/(\d+)d(\d+)/.exec(sp(main.base,'Damage')||''); if(d) out.push(`${w}[W] = ${w*+d[1]}d${d[2]}${/extra/i.test(text)?' extra':''} (${(main.si||main.base).name})`); }
     }
     const aura=/takes? (\w+(?: and \w+)?) damage equal to (?:your )?([^.,;]+)/i.exec(text);
     if(aura){
@@ -940,7 +943,8 @@ Object.assign(Builder,{
       for(const k of st.stat.keys()){
         let quals;
         if(k===what+' rolls') quals=[];
-        else { const m=new RegExp('^(.+):'+what+'$').exec(k); if(!m) continue; quals=m[1].split(',').map(x=>x.trim()); }
+        // "implement:attack(Accurate staff)": only with that item (a superior implement's own bonus)
+        else { const m=new RegExp('^(.+):'+what+'(?:\\((.+)\\))?$').exec(k); if(!m) continue; quals=m[1].split(',').map(x=>x.trim()); if(m[2]) quals.push('item:'+m[2].trim()); }
         if(!quals.every(q=>ctx.has(q))) continue;
         for(const pt of st.stat.parts(k)) if(pt.value) parts.push({v:pt.value, type:pt.type||'', label:RULES.db.els[pt.src]?.name||''});
       }
@@ -961,24 +965,28 @@ Object.assign(Builder,{
     const condPen=(this.play().conditions.some(c=>c.name==='Prone'||c.name==='Restrained')) ? [[-2,'prone or restrained']] : [];
     // an implement power: the implements in hand ("wand implement", "scythe implement", "light blade implement"),
     // so Implement Expertise and the like count with the implement they name
-    const implCtx=new Set();
+    const implCtx=new Set(), implHeld=[];
     if(isImpl) for(const sl of ['main','off','symbol1','symbol2']){
-      const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); if(!it) continue;
-      const {base,magic}=itemParts(it), words=[];
+      const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); if(!it || implHeld.some(h=>h.it===it)) continue;
+      if(sl==='off' && implHeld[0]?.it && twoHanded(implHeld[0].it)) continue;       // nothing else in hand with a two-handed one
+      const {base,magic}=itemParts(it), words=[], own=new Set(), add=x=>{ own.add(x); implCtx.add(x); };
+      implHeld.push({it,base,magic,ctx:own});
       if(magic && sp(magic,'Magic Item Type')) words.push(sp(magic,'Magic Item Type'));
       if(base){ words.push(base.name); const m=/^(orb|rod|staff|wand|tome|totem|holy symbol|ki focus)/i.exec(base.name); if(m) words.push(m[1]);
         for(const g of sp(base,'Group').split(/\s*,\s*/)) if(g) words.push(g); }
-      for(const w of words) implCtx.add(w.toLowerCase()+' implement');
+      for(const w of words) add(w.toLowerCase()+' implement');
+      if(base) add('item:'+base.name.toLowerCase());
       // a weapon used as the implement: bonuses "through a heavy blade" (Versatile Expertise's group) count too
-      if(base && base.type==='Weapon') for(const g of sp(base,'Group').split(/\s*,\s*/)) if(g) implCtx.add(g.toLowerCase()+' group');
+      if(base && base.type==='Weapon') for(const g of sp(base,'Group').split(/\s*,\s*/)) if(g) add(g.toLowerCase()+' group');
     }
-    const one=(w,magic,beast=beasts?.[0])=>{
-      const ctx=new Set([...ctxBase, ...implCtx]);
+    // (ictx: one implement's own words, for a line per implement)
+    const one=(w,magic,beast=beasts?.[0],si=null,ictx=null)=>{
+      const ctx=new Set([...ctxBase, ...(ictx||implCtx)]); if(si) ctx.add('item:'+si.name.toLowerCase());
       let abil=abilities, dAbils=dmgAbils;
       // "Strength vs. AC (melee) or Dexterity vs. AC (ranged)": a ranged-only weapon uses the ranged ability
       if(w && /\(ranged/i.test(line) && !/melee/i.test(sp(w,'Weapon Category'))){ const r=/(\w+)\s+vs\.?\s*\w+\s*\(ranged/i.exec(line); if(r && ABILITIES.includes(r[1])) abil=[r[1]]; }
       if(w){
-        ctx.add(w.name.toLowerCase()); ctx.add(w.id.toLowerCase()); if(magic) ctx.add(magic.id.toLowerCase());
+        ctx.add(w.name.toLowerCase()); ctx.add('item:'+w.name.toLowerCase()); ctx.add(w.id.toLowerCase()); if(magic) ctx.add(magic.id.toLowerCase());
         // fighting with two weapons, or with one in both hands (Two-Weapon Fighting, Tempest Technique, two-handed feats)
         if(w!==UNARMED){
           const wc=wearContext(this.ch), isMelee=x=>x && x.type==='Weapon' && /melee/i.test(sp(x,'Weapon Category'));
@@ -1055,17 +1063,19 @@ Object.assign(Builder,{
         } else if(kind!=='both') handsNote='Needs a melee weapon in each hand (Equipment: main hand and off hand).';
       }
       if(!rows.length){
-        for(const {base,magic} of ws) rows.push({...one(base,magic), weapon:magic?itemName({ids:[base.id,magic.id]}):base.name});
+        for(const {base,magic,si} of ws){ const b=si||base; rows.push({...one(base,magic,undefined,si), weapon:magic?itemName({ids:[b.id,magic.id]}):b.name}); }
         if((kind==='melee' || kind==='both') && UNARMED && !giver) rows.push(one(UNARMED,null));
       }
     } else {
-      // implement or no keyword: one line; an implement's enhancement counts for implement powers
-      let impl=null;
-      if(isImpl) for(const sl of ['main','off','symbol1','symbol2']){ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); const m=it&&itemParts(it).magic; if(m && /\+\d/.test(sp(m,'Enhancement'))){ impl=m; break; } }
-      // the implement named: the magic one, or else what is in hand (a scythe, a staff), or "none in hand"
-      let held=impl?impl.name:'';
-      if(!held && isImpl) for(const sl of ['main','off','symbol1','symbol2']){ const it=(this.ch.items||[]).find(x=>x.uid===this.ch.equip?.[sl]); if(it){ const {base,magic}=itemParts(it); held=magic&&base?itemName({ids:[base.id,magic.id]}):(base||magic)?.name||''; if(held) break; } }
-      rows.push({...one(null,impl), weapon:held || (isImpl?'none in hand':'—')});
+      // an implement power: a line for each implement in hand, with that implement's own bonuses (its enhancement, a
+      // superior implement's properties, expertise with its kind). Implements: an implement, a superior implement, or a
+      // weapon the character can use as one (a scythe for a necromancer). Otherwise (no keyword, or none in hand): one line.
+      const asImpl=({base,magic})=>(magic && IMPLEMENT_TYPES.test(sp(magic,'Magic Item Type'))) || base?.type==='Superior Implement' || (base && base.type!=='Weapon' && implKind(base))
+        || (base?.type==='Weapon' && [base.name, ...sp(base,'Group').split(/\s*,\s*/).filter(Boolean).map(g=>g+' group')].some(n=>st.names.has('implement proficiency ('+n.toLowerCase()+')')));
+      const used=isImpl ? implHeld.filter(asImpl) : [];
+      for(const h of used){ const enh=h.magic && /\+\d/.test(sp(h.magic,'Enhancement')) ? h.magic : null;
+        rows.push({...one(null,enh,undefined,null,new Set(h.ctx)), weapon:h.magic&&h.base?itemName({ids:[h.base.id,h.magic.id]}):(h.base||h.magic).name}); }
+      if(!used.length) rows.push({...one(null,null,undefined,null,new Set()), weapon:isImpl?'none in hand':'—'});
     }
     return {rows, weaponPower:isWeapon, implPower:isImpl && !isWeapon, note: handsNote || (abilities.length>1 && !/highest/i.test(before) ? 'This power lets you choose the ability; the best one is used.' : '')};
   },

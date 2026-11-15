@@ -107,6 +107,12 @@ const PROF_GROUPS=[
   ['Weapons',['SIMPLE_MELEE','MILITARY_MELEE','SIMPLE_RANGED','MILITARY_RANGED'].map(x=>'ID_INTERNAL_PROFICIENCY_'+x)],
   ['Implements',['WAND','ROD','ORB','STAFF','TOME','HOLY_SYMBOL','TOTEM','KI_FOCUSES','INSTRUMENT'].map(x=>'ID_INTERNAL_PROFICIENCY_IMPLEMENT_PROFICIENCY_('+x+')')],
 ];
+// those, and the weapons the library lets classes use as implements (a scythe, a dagger): every other implement proficiency
+function profGroups(){
+  const listed=new Set(PROF_GROUPS.flatMap(g=>g[1]));
+  const weapons=typeEls('Proficiency').filter(e=>/^ID_INTERNAL_PROFICIENCY_IMPLEMENT_PROFICIENCY_\(/.test(e.id) && !listed.has(e.id)).sort(byName).map(e=>e.id);
+  return weapons.length ? [...PROF_GROUPS, ['Weapons used as implements',weapons]] : PROF_GROUPS;
+}
 function profWord(e){
   const g=/^Weapon Group \((.+)\)$/i.exec(e.name); if(g) return g[1].toLowerCase()+(/s$/i.test(g[1])?'':'s');   // "Weapon Group (Flail)" -> flails
   const m=/^(Armor|Shield|Implement|Weapon) Proficiency \((.+)\)$/i.exec(e.name);
@@ -155,7 +161,8 @@ let _catNames=null;
 function catByWord(w){   // a keyword's or action's category entry ("Martial" -> ID_FMP_CATEGORY_36)
   const own=(Workshop.cur?.els||[]).find(o=>o.type==='Category' && o.name.toLowerCase()===String(w).toLowerCase());
   if(own) return own.id;
-  if(!_catNames || _catNames.db!==RULES.db){ const m={}; for(const e of typeEls('Category')) m[e.name.toLowerCase()] ||= e.id; _catNames={db:RULES.db, m}; }
+  // another pack's homebrew keyword is not used: each pack makes its own, so it works without the other
+  if(!_catNames || _catNames.db!==RULES.db){ const m={}; for(const e of typeEls('Category')) if(!e.hb) m[e.name.toLowerCase()] ||= e.id; _catNames={db:RULES.db, m}; }
   return _catNames.m[String(w).toLowerCase()]||'';
 }
 // a theme's power: no class of its own (the theme may be named as its "Class")
@@ -508,7 +515,9 @@ function classDraft(id){
     for(const x of d.fdefs[fid].effects) for(const sub of subFeatures(x)) load(sub); };
   for(const row of d.features) for(const fid of row.kind==='grant'?[row.id]:row.ids) load(fid);
   d.classSkills=typeEls('Skill Training').filter(e=>(e.cats||[]).includes(id)).map(e=>e.id);
-  d.builds=typeEls('Build').filter(e=>(e.cats||[]).includes(id)).sort(byName).map(e=>{ if(e.hb) d.own.add(e.id);
+  // builds in the order the class lists them ("Build Options"), any others after, by name
+  const bOrder=hbSp(cls,'Build Options').split(/\s*,\s*/), bPos=e=>{ const i=bOrder.indexOf(e.name); return i<0?1e9:i; };
+  d.builds=typeEls('Build').filter(e=>(e.cats||[]).includes(id)).sort((a,b)=>bPos(a)-bPos(b)||byName(a,b)).map(e=>{ if(e.hb) d.own.add(e.id);
     return {id:e.id, isNew:!!e.hb && !e.hbReplaces, name:e.name, keys:hbSp(e,'Key Abilities'), text:e.text||'', el:e}; });
   d.powers=typeEls('Power').filter(e=>(e.cats||[]).includes(id)).map(e=>e.id);
   // the class's own homebrew powers (made in a pack for it) can be edited here
@@ -1076,13 +1085,28 @@ const ITEM_KINDS={
   'Gear':{label:'gear', fields:[
     ['Category','Category','select',['Gear','Mount','Building','Transportation','Ammunition','Musical Instrument','Component','Drink','Food']],
     ['Gold','Price (gp)','number'], ['Silver','Price (sp)','number'], ['Copper','Price (cp)','number'], ['Weight','Weight (lb.)','number'],
-    ['count','How many come together','number'], ['Full Text','Description','area']]}};
+    ['count','How many come together','number'], ['Full Text','Description','area']]},
+  // superior implements (Player's Handbook 3): an implement, or a weapon used as one; its properties make its bonuses
+  'Superior Implement':{label:'superior implement', fields:[
+    ['Group','Implement','implement'],
+    ['Properties','Properties','text','Accurate; Energized (necrotic), Unstoppable'],
+    ['Weight','Weight (lb.)','number'], ['Gold','Price (gp)','number'], ['Full Text','Description','area']]},
+  // rituals: the details of a ritual's block; what it does is the text under them
+  'Ritual':{label:'ritual', fields:[
+    ['Level','Level','number'],
+    ['Category','Category','select',['Binding','Creation','Deception','Divination','Exploration','Restoration','Scrying','Travel','Warding']],
+    ['Time','Time','text','10 minutes'], ['Duration','Duration','text','Instantaneous; 24 hours; Special'],
+    ['Component Cost','Component cost','text','100 gp, plus a focus worth 500 gp'], ['Market Price','Market price','text','250 gp'],
+    ['Key Skill','Key skill','text','Arcana; Religion (no check)'], ['Prerequisite','Prerequisite','text','Ritual Caster']]}};
+const ITEM_TYPES=['Magic Item','Weapon','Armor','Gear','Superior Implement'];   // the kinds under "Items" (rituals have a section of their own)
 const ITEM_WEAPON_PROF={'Simple Melee':'SIMPLE_MELEE','Military Melee':'MILITARY_MELEE','Superior Melee':'SUPERIOR_MELEE','Simple Ranged':'SIMPLE_RANGED','Military Ranged':'MILITARY_RANGED','Superior Ranged':'SUPERIOR_RANGED'};
 function itemDraft(id){
   const e=hbEl(id); if(!e || !ITEM_KINDS[e.type]) return null;
   const spec={}; for(const [k,v] of Object.entries(e.spec||{})) spec[k]=String(v??'').trim();
+  const rules=e.type==='Superior Implement' ? (e.rules||[]).filter(r=>!implPropRule(r,e.name)) : e.rules||[];
   const d={id, type:e.type, isNew:!!e.hb && !e.hbReplaces, name:e.name, flavor:String(e.flavor||'').trim(), text:e.text||'', spec, cats:[...(e.cats||[])],
-    more:featureFrom({id, name:'', spec:{}, rules:e.rules||[]}), own:new Set([id])};
+    more:featureFrom({id, name:'', spec:{}, rules}), own:new Set([id])};
+  if(d.type==='Superior Implement' && hbEl(id+'_TRAINING')) d.own.add(id+'_TRAINING');
   if(d.type==='Weapon'){ for(const x of itemWeaponExtras(d,'')) if(hbEl(x.id)) d.own.add(x.id);
     // a copy of an official weapon: the one whose proficiency lists it
     const pid=id+'_PROFICIENCY'; for(const o of (Workshop.cur?.ops||[])) if(o.op==='append' && /^ID_INTERNAL_PROFICIENCY_WEAPON_PROFICIENCY_/.test(o.id) && (o.rules||[]).some(([t,a])=>t==='grant' && a.name===pid))
@@ -1092,13 +1116,15 @@ function itemDraft(id){
 }
 const itemCore=d=>({name:d.name, flavor:d.flavor, text:d.text, spec:Object.fromEntries(Object.entries(d.spec).filter(([k,v])=>v!=='').sort()), more:d.more.effects.map(x=>({...x,rule:undefined}))});
 function newItemDraft(pack, type, name, fromId){
-  const id=uniqueId('ID_HB_'+slugId(pack.name)+'_'+(type==='Magic Item'?'MAGIC_ITEM':type.toUpperCase())+'_'+slugId(name));
+  const id=uniqueId('ID_HB_'+slugId(pack.name)+'_'+(type==='Magic Item'?'MAGIC_ITEM':type.toUpperCase().replace(/ /g,'_'))+'_'+slugId(name));
   const d=fromId ? itemDraft(fromId) : {type, flavor:'', text:'', spec:{}, cats:[], more:{id,name:'',effects:[],keep:[]}};
   if(!fromId){
     if(type==='Magic Item') Object.assign(d.spec,{'Magic Item Type':'Wondrous Item','Level':'1','Gold':'360','Rarity':'Uncommon'});
     if(type==='Weapon'){ Object.assign(d.spec,{'Weapon Category':'Military Melee','Hands Required':'One-Handed','Proficiency Bonus':'2','Damage':'1d8','Group':'Heavy Blade','Weight':'4','Gold':'15'}); d.cats=['ID_INTERNAL_CATEGORY_SELECTABLE']; }
     if(type==='Armor') Object.assign(d.spec,{'Armor Type':'Light','Armor Category':'Leather','Armor Bonus':'2','Check':'0','Speed':'0','Weight':'15','Gold':'25','Item Slot':'Body'});
     if(type==='Gear') Object.assign(d.spec,{'Category':'Gear','Gold':'1','Weight':'1','count':'1'});
+    if(type==='Superior Implement') Object.assign(d.spec,{'Group':'Rod','WeaponEquiv':'','Properties':'Accurate','Weight':'2','Gold':'20','Item Slot':'Off-hand'});
+    if(type==='Ritual') Object.assign(d.spec,{'Level':'1','Category':'Exploration','Time':'10 minutes','Duration':'Instantaneous','Component Cost':'10 gp','Market Price':'50 gp','Key Skill':'Arcana (no check)','type':'Ritual'});
   }
   else if(type==='Weapon') d.cats=d.cats.filter(c=>!/^ID_INTERNAL_CATEGORY_(SELECTABLE)$/.test(c)).concat('ID_INTERNAL_CATEGORY_SELECTABLE');
   delete d.spec['_SupportsID']; delete d.spec['InternalOnly'];
@@ -1134,8 +1160,10 @@ function itemEntries(d, source){
     for(const k of Object.keys(o.spec)) if(!(k in d.spec)) delete o.spec[k]; }
   // rules: its bonuses; armor's own (armor bonus, check, speed) follow the details
   const armorCh=k=>d.type==='Armor' && (d.isNew || was && (was.spec?.[k]||'')!==(now.spec[k]||''));
-  if(ch('more') || ['Armor Bonus','Check','Speed'].some(armorCh)){
+  const implCh=d.type==='Superior Implement' && (ch('name') || ch('spec') || ch('more'));
+  if(ch('more') || ['Armor Bonus','Check','Speed'].some(armorCh) || implCh){
     let rules=featureRules(d.more);
+    if(d.type==='Superior Implement') rules=[...implPropRules(d.name, d.spec['Properties']), ...rules];
     if(d.type==='Armor'){
       const num=v=>/^[+-]?\d+$/.test(String(v||'').trim());
       const set=(name,type,v)=>{ v=String(v||'').trim(); const i=rules.findIndex(([t,a])=>t==='statadd' && a.name===name && (!type || a.type===type) && !a.requires);
@@ -1160,15 +1188,43 @@ function itemEntries(d, source){
   // a weapon's categories: its groups and hands
   if(d.type==='Weapon' && (d.isNew || ['Group','Hands Required'].some(k=>(was?.spec?.[k]||'')!==(now.spec[k]||'')))){
     const groups=weaponGroupIds(d.spec['Group']), two=/two/i.test(d.spec['Hands Required']||'');
-    o.cats=[...(o.cats||[]).filter(c=>hbEl(c)?.type!=='Weapon Group' && !/^ID_INTERNAL_CATEGORY_(ONE|TWO)-HAND(ED)?$/.test(c)),
-      ...(two?['ID_INTERNAL_CATEGORY_TWO-HANDED']:['ID_INTERNAL_CATEGORY_ONE-HAND','ID_INTERNAL_CATEGORY_ONE-HANDED']), ...groups];
+    o.cats=[...(o.cats||[]).filter(c=>hbEl(c)?.type!=='Weapon Group' && !/^ID_INTERNAL_CATEGORY_(ONE|TWO)-HAND(S|ED)?$/.test(c)),
+      ...(two?['ID_INTERNAL_CATEGORY_TWO-HANDS','ID_INTERNAL_CATEGORY_TWO-HANDED']:['ID_INTERNAL_CATEGORY_ONE-HAND','ID_INTERNAL_CATEGORY_ONE-HANDED']), ...groups];
     o.cats=[...new Set(o.cats)];
     const was0=(base?.cats||[]); if(!d.isNew && o.cats.length===was0.length && o.cats.every(c=>was0.includes(c))) o.cats=[...was0];
   }
   if(d.isNew && d.type==='Magic Item' && !o.spec['Magic Item Type']) o.spec['Magic Item Type']='Wondrous Item';
   const els=[o];
   if(d.type==='Weapon' && d.id.startsWith('ID_HB_')) els.push(...itemWeaponExtras(d, source));
+  if(d.type==='Superior Implement' && d.id.startsWith('ID_HB_')) els.push(implTraining(d, source));
   return els;
+}
+/* A superior implement's properties, written as the official ones are: Accurate +1 to attack rolls; Energized (type)
+   +2 damage of that type (+3 at paragon, +4 at epic); Deadly +1 damage (+2, +3); Undeniable, Unerring, Unstoppable +1
+   against Will, Reflex, Fortitude. Each works for whoever has its Superior Implement Training. The others (Distant,
+   Empowered Crit, Forceful, Shielding...) are what the property's description says, as in the books. */
+const IMPL_PROPS=['Accurate','Blinking','Deadly','Distant','Empowered Crit','Energized (damage type)','Forceful','Mobile','Reaching','Shielding','Undeniable','Unerring','Unstoppable'];
+function implPropRules(N, props){
+  const out=[], T='Superior Implement Training ('+N+')', P=String(props||'').toLowerCase(), on=w=>new RegExp('\\b'+w+'\\b').test(P);
+  const sa=(name,value,more)=>out.push(['statadd',{name,value,...more}]), si={type:'Superior Implement',requires:T};
+  const tiers=(n,v)=>{ sa(n,v); sa(n,'+1',{requires:'Paragon Tier'}); sa(n,'+1',{requires:'Epic Tier'}); };
+  if(on('accurate')) sa(`implement:attack(${N})`,'+1',si);
+  const en=/energized\s*\(\s*(\w+)\s*\)/.exec(P);
+  if(en){ tiers(N,'+2'); sa(`implement,${en[1][0].toUpperCase()+en[1].slice(1)}:damage(${N})`,'+'+N,si); }
+  if(on('deadly')){ const c=en ? N+' (deadly)' : N; tiers(c,'+1'); sa(`implement:damage(${N})`,'+'+c,si); }
+  for(const [w,d] of [['undeniable','will'],['unerring','reflex'],['unstoppable','fortitude']]) if(on(w)) sa(`implement,${d}:attack(${N})`,'+1',si);
+  return out;
+}
+// one of those (so the editor shows only the bonuses added to them)
+const implPropRule=([t,a],N)=>t==='statadd' && (a.name===N || a.name===N+' (deadly)' || String(a.name).endsWith('('+N+')'));
+// what the implement is: its kind ("Rod"), or the weapon it is ("Scythe")
+const implOf=d=>{ const w=hbEl(d.spec['WeaponEquiv']); return w?.type==='Weapon' && !IMPL_GROUPS.includes(d.spec['Group']) ? w.name : d.spec['Group']||''; };
+// the feat that lets a character use it, as the official ones: "Can use the Rod implement"
+function implTraining(d, source){
+  const N=d.name, k=implOf(d), pre='Can use the '+k+' implement';
+  return {id:d.id+'_TRAINING', name:`Superior Implement Training (${N})`, type:'Feat', source, pre, ppre:pre,
+    spec:{'_SupportsID':'ID_FMP_FEAT_2624','_RequiresID':d.id,'Short Description':`Can use ${N}s`+(d.spec['Properties']?' ('+d.spec['Properties'].toLowerCase()+')':''),'Tier':'Heroic'},
+    text:`You can use the ${N} superior implement.`};
 }
 // a new weapon's kind ("Military Melee") makes those proficient with that kind proficient with it too; a copy of a
 // weapon, those proficient with that weapon (a fullblade's copy: whoever can use a fullblade)
@@ -1302,7 +1358,7 @@ const Workshop={
     if(this.th) return this.themeEditor();
     if(this.item) return this.itemEditor();
     const classes=p.els.filter(o=>o.type==='Class');
-    const other=p.els.length-p.els.filter(o=>this.ownedByClass(p,o) || /^(Background|Background Choice|Feat|Theme|Paragon Path|Epic Destiny|Magic Item|Weapon|Armor|Gear|Race|Grants|Racial Trait)$/.test(o.type) || /_PROFICIENCY(_FEAT)?$/.test(o.id) || (o.type==='Power' && (!hbSp(o,'Class') || isThemePower(o) || isPathOwnedPower(o)))).length;
+    const other=p.els.length-p.els.filter(o=>this.ownedByClass(p,o) || /^(Background|Background Choice|Feat|Theme|Paragon Path|Epic Destiny|Magic Item|Weapon|Armor|Gear|Ritual|Race|Grants|Racial Trait|Language)$/.test(o.type) || /_PROFICIENCY(_FEAT)?$/.test(o.id) || (o.type==='Power' && (!hbSp(o,'Class') || isThemePower(o) || isPathOwnedPower(o)))).length;
     const otherOps=p.ops.filter(o=>!classes.some(c=>classOwnsOp(c.id,o,new Set()))).length;
     const list=el('div',{class:'cards'});
     for(const c of classes){
@@ -1368,7 +1424,12 @@ const Workshop={
       el('div',{class:'brow wrap'},
         el('button',{class:'btn primary small',type:'button',text:'+ New item',onclick:()=>this.newItemDlg()}),
         el('button',{class:'btn small',type:'button',text:'Change an official item',onclick:()=>this.changeItemDlg()})),
-      this.entryCards(p.els.filter(o=>ITEM_KINDS[o.type]), e=>[hbSp(e,'Magic Item Type')||ITEM_KINDS[e.type].label, hbSp(e,'Level')&&'level '+hbSp(e,'Level')].filter(Boolean).join(', '), id=>this.editItem(id), id=>this.removeItem(id), 'No items in this pack yet.'),
+      this.entryCards(p.els.filter(o=>ITEM_TYPES.includes(o.type)), e=>[hbSp(e,'Magic Item Type')||ITEM_KINDS[e.type].label, hbSp(e,'Level')&&'level '+hbSp(e,'Level')].filter(Boolean).join(', '), id=>this.editItem(id), id=>this.removeItem(id), 'No items in this pack yet.'),
+      el('h4',{class:'wssub',text:'Rituals'}),
+      el('div',{class:'brow wrap'},
+        el('button',{class:'btn primary small',type:'button',text:'+ New ritual',onclick:()=>this.newItemDlg('Ritual')}),
+        el('button',{class:'btn small',type:'button',text:'Change an official ritual',onclick:()=>this.changeItemDlg('Ritual')})),
+      this.entryCards(p.els.filter(o=>o.type==='Ritual'), e=>[hbSp(e,'Category'), hbSp(e,'Level')&&'level '+hbSp(e,'Level')].filter(Boolean).join(', '), id=>this.editItem(id), id=>this.removeItem(id), 'No rituals in this pack yet.'),
       (other||otherOps)?el('p',{class:'muted small',text:`This pack also holds ${other+otherOps} other entr${other+otherOps===1?'y':'ies'} (made elsewhere, or for a later part of the workshop). They are kept as they are.`}):null);
   },
   // a list of a pack's entries of one kind, with Edit and Delete
@@ -1382,7 +1443,7 @@ const Workshop={
     if(!list.length) bl.append(el('p',{class:'muted',text:none}));
     return bl;
   },
-  ownedByClass(p,o){ const cls=p.els.filter(x=>x.type==='Class'); return o.type==='Class' || o.type==='Category' || /^ID_HB_.*_(FEAT_IMPLEMENT|VERSATILE)_EXPERTISE_/.test(o.id) || cls.some(c=>o.id===c.id.replace('_CLASS_','_GRANTS_') || o.id===c.id.replace('_CLASS_','_COUNTSAS_') || (o.cats||[]).includes(c.id) || hbSp(o,'_SupportsID')===c.id) ||
+  ownedByClass(p,o){ const cls=p.els.filter(x=>x.type==='Class'); return o.type==='Class' || o.type==='Category' || /^ID_HB_.*_(FEAT_IMPLEMENT|VERSATILE)_EXPERTISE_/.test(o.id) || cls.some(c=>o.id===c.id.replace('_CLASS_','_GRANTS_') || o.id===c.id.replace('_CLASS_','_COUNTSAS_') || (o.cats||[]).includes(c.id) || hbSp(o,'_SupportsID')===c.id || o.type==='Power' && hbSp(o,'Class')===c.id) ||
     (o.type==='Class Feature'); },
 
   /* ---------- packs ---------- */
@@ -1825,16 +1886,17 @@ const Workshop={
   },
 
   /* ---------- items ---------- */
-  async newItemDlg(){
-    const r=await formDlg('New item',[{key:'name',label:'Name',value:''},
-      {key:'type',label:'Kind',type:'select',options:[['Magic Item','A magic item'],['Weapon','A weapon'],['Armor','Armor or a shield'],['Gear','Gear (rope, a mount, food…)']]},
-      {key:'from',label:'Start from',type:'select',options:[['','Nothing (a blank one)'],['copy','A copy of an item (choose it next)…']]}]);
+  async newItemDlg(kind){
+    const r=await formDlg(kind==='Ritual'?'New ritual':'New item',[{key:'name',label:'Name',value:''},
+      ...(kind ? [] : [{key:'type',label:'Kind',type:'select',options:[['Magic Item','A magic item'],['Weapon','A weapon'],['Armor','Armor or a shield'],['Gear','Gear (rope, a mount, food…)'],['Superior Implement','A superior implement']]}]),
+      {key:'from',label:'Start from',type:'select',options:[['','Nothing (a blank one)'],['copy',kind==='Ritual'?'A copy of a ritual (choose it next)…':'A copy of an item (choose it next)…']]}]);
     if(!r || !r.name.trim()) return;
+    if(kind) r.type=kind;
     let from=''; if(r.from==='copy'){ from=(await pickEls({title:'A copy of which '+ITEM_KINDS[r.type].label+'?',types:[r.type]}))[0]; if(!from) return; }
     this.draft=null; this.bg=null; this.feat=null; this.sp=null; this.th=null;
     this.item=newItemDraft(this.cur, r.type, r.name.trim(), from); this.changed(); this.render();
   },
-  async changeItemDlg(){ const ids=await pickEls({title:'Change an official item',types:['Magic Item','Weapon','Armor','Gear']}); if(ids[0]) this.editItem(ids[0]); },
+  async changeItemDlg(kind){ const ids=await pickEls({title:kind==='Ritual'?'Change an official ritual':'Change an official item',types:kind?[kind]:ITEM_TYPES}); if(ids[0]) this.editItem(ids[0]); },
   editItem(id){ const d=itemDraft(id); if(!d) return alertMsg('That item is not in the rules any more.'); this.draft=null; this.bg=null; this.feat=null; this.sp=null; this.item=null; this.th=null; this.item=d; this.status=''; this.render(); },
   applyItem(){
     const d=this.item, p=this.cur;
@@ -1851,7 +1913,7 @@ const Workshop={
     const p=this.cur, e=p.els.find(o=>o.id===id), off=!id.startsWith('ID_HB_');
     if(!await confirmMsg(off?`Delete this pack's changes to ${e.name}? The official ${e.name} is back as it was.`:`Delete ${e.name} from this pack? Characters who have it lose it.`)) return;
     this.item=null; const pid=id+'_PROFICIENCY';
-    p.els=p.els.filter(o=>o.id!==id && o.id!==pid && o.id!==pid+'_FEAT');
+    p.els=p.els.filter(o=>o.id!==id && o.id!==pid && o.id!==pid+'_FEAT' && o.id!==id+'_TRAINING');
     p.ops=(p.ops||[]).filter(o=>!(o.op==='append' && (o.rules||[]).some(([t,a])=>t==='grant' && a.name===pid)));
     this.dirtyPack=p; await this.save(); this.render();
   },
@@ -1875,6 +1937,18 @@ const Workshop={
     const show=()=>{ try{ Builder.renderElement(preview,null,{...itemEntries({...d, orig:d.orig||''},this.cur.name)[0], hb:this.cur.name}); }catch(e){ preview.textContent=''; } };
     const spf=([k,label,kind,opts,cond])=>{
       if(typeof opts==='function'){ cond=opts; opts=null; } if(typeof cond==='function' && !cond(d)) return null;
+      if(kind==='implement'){
+        const weps=typeEls('Proficiency').map(x=>/^Implement Proficiency \((.+)\)$/i.exec(x.name)?.[1]).filter(Boolean)
+          .flatMap(n=>(RULES.db.nameIdx[n.toLowerCase()]||[]).map(id=>RULES.db.els[id]).filter(w=>w?.type==='Weapon').slice(0,1));
+        const uniq=[...new Map(weps.map(w=>[w.id,w])).values()].sort(byName);
+        const cur=hbEl(d.spec['WeaponEquiv'])?.type==='Weapon' && !IMPL_GROUPS.includes(d.spec['Group']) ? d.spec['WeaponEquiv'] : d.spec['Group'];
+        const sl=el('select',{}, el('optgroup',{label:'Implements'}, ...IMPL_GROUPS.map(g=>el('option',{value:g,text:g,selected:g===cur}))),
+          el('optgroup',{label:'Weapons used as implements'}, ...uniq.map(w=>el('option',{value:w.id,text:w.name,selected:w.id===cur}))));
+        sl.onchange=()=>{ const w=hbEl(sl.value);
+          if(w?.type==='Weapon'){ d.spec['WeaponEquiv']=w.id; d.spec['Group']=hbSp(w,'Group'); }
+          else { d.spec['Group']=sl.value; d.spec['WeaponEquiv']=sl.value==='Staff'?'ID_FMP_WEAPON_10':''; }   // a staff is a quarterstaff, as the official ones
+          this.changed(); show(); };
+        return el('label',{class:'wsfield'}, el('span',{text:label}), sl, el('small',{class:'muted',text:'Who can use it: those who can use this implement, with its Superior Implement Training feat (made with it). One that is a weapon also attacks as that weapon.'})); }
       if(kind==='select'){ const list=[...opts]; if(d.spec[k] && !list.includes(d.spec[k])) list.push(d.spec[k]);
         const sl=el('select',{}, ...list.map(o=>el('option',{value:o,text:o||'(none)',selected:o===(d.spec[k]||'')})));
         sl.onchange=()=>{ d.spec[k]=sl.value; if(k==='Magic Item Type' && SLOT_OF[sl.value]!==undefined) d.spec['Item Slot']=SLOT_OF[sl.value]; else if(k==='Magic Item Type' && /^(Weapon|Armor)$/.test(sl.value)) d.spec['Item Slot']='';
@@ -1886,7 +1960,8 @@ const Workshop={
       const fl=this.field(label, d.spec[k]||'', v=>{ const was=d.spec[k]; d.spec[k]=String(v).trim();
           // the usual price for the level, unless a price of its own was set
           if(k==='Level' && d.type==='Magic Item' && (!d.spec['Gold'] || +d.spec['Gold']===STD_PRICE[+was])){ d.spec['Gold']=String(STD_PRICE[+v]||''); const g=document.getElementById('wsItemGold'); if(g) g.value=d.spec['Gold']; } },
-        {area:kind==='area', rows:kind==='area'?3:undefined, placeholder:kind!=='number'&&opts&&!Array.isArray(opts)?opts:'', hint:kind==='number'&&typeof opts==='string'?opts:undefined, after:show});
+        {area:kind==='area', rows:kind==='area'?3:undefined, placeholder:kind!=='number'&&opts&&!Array.isArray(opts)?opts:'', after:show,
+          hint:kind==='number'&&typeof opts==='string'?opts : k==='Properties'&&d.type==='Superior Implement' ? 'The official ones: '+IMPL_PROPS.join(', ')+'. The builders add up Accurate, Deadly, Energized, Undeniable, Unerring and Unstoppable; the others work as the rules describe them.' : undefined});
       if(k==='Gold') fl.querySelector('input').id='wsItemGold'; return fl;
     };
     const known=new Set(K.fields.map(f=>f[0]));
@@ -1894,7 +1969,7 @@ const Workshop={
     const box=el('div',{},
       el('div',{class:'stepwrap'}, el('div',{class:'stephead wsbar'},
         el('button',{class:'btn small',type:'button',text:'← '+this.cur.name,onclick:()=>this.close()}),
-        el('h3',{text:d.name||'Unnamed item'}), el('span',{class:'hb small',text:d.isNew?'new '+K.label:'changing an official '+K.label}),
+        el('h3',{text:d.name||'Unnamed '+K.label}), el('span',{class:'hb small',text:d.isNew?'new '+K.label:'changing an official '+K.label}),
         el('span',{id:'wsStatus',class:'muted small',text:this.status}), el('span',{style:'flex:1'}),
         el('button',{class:'btn primary small',type:'button',text:'Done',title:'Save and go back to the pack',onclick:()=>this.close()}))),
       el('div',{class:'bcard wide'}, el('div',{class:'wspowergrid'},
@@ -1903,14 +1978,15 @@ const Workshop={
             this.field('Name',d.name,v=>{ d.name=v; const h=$('.wsbar h3'); if(h) h.textContent=v||'Unnamed item'; },{after:show}),
             ...K.fields.map(spf).filter(Boolean),
             this.field('Flavor (optional)',d.flavor,v=>d.flavor=v,{area:true,rows:2,after:show}),
-            d.text || d.type!=='Magic Item' ? this.field('Text (optional)',d.text,v=>d.text=v,{area:true,rows:3,after:show,hint:'Shown under the details.'}) : null),
+            d.type==='Ritual' ? this.field('What it does',d.text,v=>d.text=v,{area:true,rows:8,after:show,hint:'The ritual\'s text, shown under its details.'})
+              : d.text || d.type!=='Magic Item' ? this.field('Text (optional)',d.text,v=>d.text=v,{area:true,rows:3,after:show,hint:'Shown under the details.'}) : null),
           d.type==='Magic Item' && d.isNew && /\+1\s*$/.test(d.name) ? el('div',{class:'brow wrap',style:'margin:8px 0'},
             el('button',{class:'btn small',type:'button',text:'Make the +2 to +6 versions',title:'Each five levels higher, at the usual price; "+1" in its enhancement and enhancement bonuses becomes +2, +3…',onclick:()=>this.itemSeries()}),
             el('small',{class:'muted',text:'Official magic weapons, armor and neck items come in each enhancement bonus, as items of their own.'})) : null,
           d.type==='Weapon' && d.id.startsWith('ID_HB_') ? el('p',{class:'muted small',text:'Characters proficient with its category ("'+(d.spec['Weapon Category']||'')+'")'+(d.copyOf&&hbEl(d.copyOf)?' or with the '+hbEl(d.copyOf).name.toLowerCase()+' it was copied from':'')+' are proficient with it; the Weapon Proficiency feat can choose it too.'}) : null,
-          el('h4',{class:'wssub',text:'What it does'}),
-          el('p',{class:'muted small',text:d.type==='Armor'?'Its armor bonus, check and speed penalties follow the details above. Add other bonuses here.':'Bonuses the builders add up (an enhancement bonus to defenses, a skill bonus…). Powers and conditional benefits are written in the details above.'}),
-          this.effects(d.more,{noSpellbook:true}),
+          d.type==='Ritual' ? null : el('h4',{class:'wssub',text:'What it does'}),
+          d.type==='Ritual' ? null : el('p',{class:'muted small',text:d.type==='Armor'?'Its armor bonus, check and speed penalties follow the details above. Add other bonuses here.':'Bonuses the builders add up (an enhancement bonus to defenses, a skill bonus…). Powers and conditional benefits are written in the details above.'}),
+          d.type==='Ritual' ? null : this.effects(d.more,{noSpellbook:true}),
           el('details',{class:'wspmore',open:false},
             el('summary',{text:'Other details (advanced)'+(others.length?' ('+others.length+')':'')}),
             el('p',{class:'muted small',text:'Details the builders keep that aren\'t above, one "name = value" a line. Change with care.'}),
@@ -2196,10 +2272,15 @@ const Workshop={
   },
   tProfs(){
     const d=this.draft, out=el('div',{});
-    for(const [label,ids] of PROF_GROUPS){
-      out.append(el('h4',{class:'wssub',text:label}), this.ticks(ids.filter(hbEl).map(id=>[id,profWord(hbEl(id))]), d.profs, v=>{ d.profs=[...d.profs.filter(x=>!ids.includes(x)), ...v.filter(x=>ids.includes(x))]; }));
+    const groups=profGroups();
+    for(const [label,ids] of groups){
+      const ticks=this.ticks(ids.filter(hbEl).map(id=>[id,profWord(hbEl(id))]), d.profs, v=>{ d.profs=[...d.profs.filter(x=>!ids.includes(x)), ...v.filter(x=>ids.includes(x))]; });
+      // the long list of weapons used as implements stays folded unless one is chosen
+      if(ids.length>20){ const n=ids.filter(x=>d.profs.includes(x)).length;
+        out.append(el('details',{class:'wspmore',open:n>0}, el('summary',{text:label+(n?' ('+n+' chosen)':'')}), el('p',{class:'muted small',text:'Weapons a class can use as an implement for its implement powers (a necromancer\'s scythe, a dagger).'}), ticks)); }
+      else out.append(el('h4',{class:'wssub',text:label}), ticks);
     }
-    const listed=new Set(PROF_GROUPS.flatMap(g=>g[1])), extra=d.profs.filter(x=>!listed.has(x));
+    const listed=new Set(groups.flatMap(g=>g[1])), extra=d.profs.filter(x=>!listed.has(x));
     out.append(el('h4',{class:'wssub',text:'Other proficiencies'}),
       el('div',{class:'chosen'}, ...extra.map(id=>el('span',{class:'pick'}, hbEl(id)?.name||id,
         el('button',{class:'x',type:'button',title:'Remove',text:'×',onclick:()=>{ d.profs=d.profs.filter(x=>x!==id); this.changed(); this.render(); }}))),
@@ -2251,7 +2332,7 @@ const Workshop={
       el('button',{class:'btn small',type:'button',text:'+ Choice between features',onclick:()=>{ d.features.push({kind:'choose',number:1,ids:[this.newFeature().id,this.newFeature().id]}); this.changed(); this.render(); }})));
     return out;
   },
-  fdef(id){ const d=this.draft||this.th||this.bg; if(!d.fdefs[id]){ const e=hbEl(id); d.fdefs[id]=e ? {...featureFrom(e), isNew:false, orig:JSON.stringify(featCore(featureFrom(e)))} : {id, isNew:true, name:'New feature', level:1, short:'', text:'', effects:[], keep:[]}; } return d.fdefs[id]; },
+  fdef(id){ const d=this.draft||this.th||this.bg||this.feat; if(!d?.fdefs){ const e=hbEl(id); return e?featureFrom(e):{id, name:id}; } if(!d.fdefs[id]){ const e=hbEl(id); d.fdefs[id]=e ? {...featureFrom(e), isNew:false, orig:JSON.stringify(featCore(featureFrom(e)))} : {id, isNew:true, name:'New feature', level:1, short:'', text:'', effects:[], keep:[]}; } return d.fdefs[id]; },
   newFeature(){ const d=this.draft||this.th, id=uniqueId('ID_HB_'+slugId(this.cur.name)+'_FEATURE_'+slugId(d.name)); const f={id, isNew:true, name:'New feature', level:1, short:'', text:'', effects:[], keep:[], open:true}; d.fdefs[id]=f; d.own.add(id); return f; },
   featureBox(f, row){
     const head=el('div',{class:'brow wrap wsfhead'},
@@ -2326,7 +2407,8 @@ const Workshop={
       }
       else if(x.kind==='choose') rest=el('span',{class:'brow wrap'}, 'choose', num('number'), 'of',
           ...x.ids.map((id,j)=>el('span',{class:'pick'}, this.fdef(id).name, el('button',{class:'x',type:'button',text:'×',onclick:()=>{ x.ids.splice(j,1); redo(); }}))),
-          el('button',{class:'btn small',type:'button',text:'+ New option',onclick:()=>{ x.ids.push(this.newFeature().id); redo(); }}),
+          // a new feature is made only in a class, theme, path, destiny or race (they save it); elsewhere, existing ones are chosen
+          (this.draft||this.th)?el('button',{class:'btn small',type:'button',text:'+ New option',onclick:()=>{ x.ids.push(this.newFeature().id); redo(); }}):null,
           el('button',{class:'btn small',type:'button',text:'+ Existing…',onclick:async()=>{ const ids=await pickEls({title:'Options',types:['Class Feature'],multi:true,skip:new Set(x.ids)}); ids.forEach(id=>{ this.fdef(id); x.ids.push(id); }); if(ids.length) redo(); }}));
       else if(x.kind==='choosePower' || x.kind==='chooseFeat'){
         const type=x.kind==='choosePower'?'Power':'Feat';
